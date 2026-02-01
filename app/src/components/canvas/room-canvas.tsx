@@ -14,9 +14,10 @@ const LABEL_SHADOW = 'rgba(15, 23, 42, 0.35)'
 const HOVER_FILL = 'rgba(34, 197, 94, 0.35)'
 const HOVER_STROKE = 'rgba(34, 197, 94, 0.9)'
 const HOVER_DASH = [8, 5]
-const UNAVAILABLE_FILL = 'rgba(251, 146, 60, 0.35)'
-const UNAVAILABLE_STROKE = 'rgba(251, 146, 60, 0.9)'
-const APPLY_ALPHA = 0.55
+const SELECTED_GROUP_FILL = 'rgba(14, 116, 144, 0.25)'
+const SELECTED_GROUP_STROKE = 'rgba(14, 116, 144, 0.85)'
+const SELECTED_GROUP_DASH = [6, 4]
+const COLOR_APPLY_ALPHA = 0.9
 const TEXTURE_SILHOUETTE_ALPHA = 0.6
 const ILLUM_SILHOUETTE_ALPHA = 0.5
 const VISIBLE_LABELS = new Set([
@@ -168,16 +169,17 @@ const drawFallbackOverlay = (
 	ctx.strokeRect(x, y, w, h)
 }
 
-const drawUnavailableOverlay = (
+
+const drawSelectedGroupOverlay = (
 	ctx: CanvasRenderingContext2D,
 	detection: Detection,
 	width: number,
 	height: number,
 ) => {
-	ctx.fillStyle = UNAVAILABLE_FILL
-	ctx.strokeStyle = UNAVAILABLE_STROKE
+	ctx.fillStyle = SELECTED_GROUP_FILL
+	ctx.strokeStyle = SELECTED_GROUP_STROKE
 	ctx.lineWidth = 2
-	ctx.setLineDash([])
+	ctx.setLineDash(SELECTED_GROUP_DASH)
 	if (detection.polygon && detection.polygon.length >= 3) {
 		ctx.beginPath()
 		detection.polygon.forEach((point, index) => {
@@ -444,7 +446,7 @@ export function RoomCanvas() {
 			canvas.height = maskImg.naturalHeight
 			const ctx = canvas.getContext('2d')
 			if (!ctx) return canvas
-			ctx.fillStyle = hexToRgba(color, APPLY_ALPHA)
+			ctx.fillStyle = hexToRgba(color, COLOR_APPLY_ALPHA)
 			ctx.fillRect(0, 0, canvas.width, canvas.height)
 			ctx.globalCompositeOperation = 'destination-in'
 			ctx.drawImage(maskImg, 0, 0)
@@ -682,7 +684,7 @@ export function RoomCanvas() {
 							)
 							return
 						}
-						bctx.fillStyle = hexToRgba(applied.color, APPLY_ALPHA)
+						bctx.fillStyle = hexToRgba(applied.color, COLOR_APPLY_ALPHA)
 						bctx.strokeStyle = hexToRgba(applied.color, 0.9)
 						bctx.lineWidth = 2
 						drawFallbackOverlay(bctx, d, dw, dh)
@@ -698,30 +700,35 @@ export function RoomCanvas() {
 			// 3. Hover highlight overlay
 			if (hoveredIndex !== null && detections[hoveredIndex]) {
 				const detection = detections[hoveredIndex]
+				const base = getBaseLabel(detection.label)
 				ctx.save()
 				ctx.translate(p.x + baseX, p.y + baseY)
 				ctx.translate(dw / 2, dh / 2)
 				ctx.scale(s, s)
 				ctx.translate(-dw / 2, -dh / 2)
-				ctx.globalCompositeOperation = 'source-over'
-				if (detection.maskUrl && maskImages[detection.maskUrl]) {
-					const maskImg = maskImages[detection.maskUrl]
-					const overlay = getMaskOverlay(detection.maskUrl, maskImg)
-					ctx.globalCompositeOperation = 'source-over'
-					ctx.drawImage(
-						overlay,
-						0,
-						0,
-						overlay.width,
-						overlay.height,
-						0,
-						0,
-						dw,
-						dh,
-					)
-				} else {
-					drawUnavailableOverlay(ctx, detection, dw, dh)
-				}
+				detections.forEach((d) => {
+					if (getBaseLabel(d.label) !== base) return
+					if (d.maskUrl && maskImages[d.maskUrl]) {
+						const maskImg = maskImages[d.maskUrl]
+						const overlay = getMaskOverlay(d.maskUrl, maskImg)
+						ctx.globalCompositeOperation = 'source-over'
+						ctx.globalAlpha = 0.8
+						ctx.drawImage(
+							overlay,
+							0,
+							0,
+							overlay.width,
+							overlay.height,
+							0,
+							0,
+							dw,
+							dh,
+						)
+						ctx.globalAlpha = 1
+						return
+					}
+					drawSelectedGroupOverlay(ctx, d, dw, dh)
+				})
 				ctx.restore()
 			}
 
@@ -738,11 +745,16 @@ export function RoomCanvas() {
 			detections.forEach((d, index) => {
 				const baseLabel = getBaseLabel(d.label)
 				if (!VISIBLE_LABELS.has(baseLabel)) return
-				if (selectedRegionId && d.label !== selectedRegionId) return
+				if (
+					selectedRegionId &&
+					getBaseLabel(selectedRegionId) !== baseLabel
+				)
+					return
 				const showScore = d.score < 0.999
+				const displayLabel = getBaseLabel(d.label)
 				const label = showScore
-					? `${d.label} ${(d.score * 100).toFixed(0)}%`
-					: d.label
+					? `${displayLabel} ${(d.score * 100).toFixed(0)}%`
+					: displayLabel
 				const tw = ctx.measureText(label).width
 				const w = tw + LABEL_PADDING_X * 2
 				const h = LABEL_ROW

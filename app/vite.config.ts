@@ -18,6 +18,7 @@ export default defineConfig({
 			},
 			'/uploads': { target: apiTarget, changeOrigin: true },
 			'/cache': { target: apiTarget, changeOrigin: true },
+			'/samples': { target: apiTarget, changeOrigin: true },
 			'/textures': { target: apiTarget, changeOrigin: true },
 		},
 	},

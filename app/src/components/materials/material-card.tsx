@@ -22,9 +22,9 @@ export function MaterialCard({ material, onSelect }: MaterialCardProps) {
 		<button
 			type="button"
 			onClick={handleClick}
-			className={`flex flex-col items-stretch rounded-lg border-2 p-1.5 text-left transition-all duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 active:scale-[0.97] ${
+			className={`flex flex-col items-stretch rounded-lg border-2 p-1.5 text-left transition-all duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-500 active:scale-[0.97] ${
 				isSelected
-					? 'border-teal-500 bg-teal-50/90 ring-2 ring-teal-500/20 dark:bg-teal-900/20 dark:ring-teal-400/25'
+					? 'border-emerald-500 bg-emerald-50/90 ring-2 ring-emerald-500/20 dark:bg-emerald-900/20 dark:ring-emerald-400/25'
 					: 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 dark:border-slate-600 dark:hover:border-slate-500 dark:hover:bg-slate-800/40'
 			}`}
 		>

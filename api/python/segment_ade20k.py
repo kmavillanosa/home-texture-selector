@@ -342,6 +342,7 @@ def run_one(
 	image_path: Path,
 	upload_id: str,
 	cache_dir: Path,
+	url_prefix: str,
 	processor,
 	model,
 ) -> dict:
@@ -354,6 +355,11 @@ def run_one(
 	import torch.nn.functional as F
 
 	cache_dir.mkdir(parents=True, exist_ok=True)
+	if not url_prefix:
+		url_prefix = "/cache"
+	if not url_prefix.startswith("/"):
+		url_prefix = f"/{url_prefix}"
+	url_prefix = url_prefix.rstrip("/")
 	img = Image.open(image_path).convert("RGB")
 	orig_w, orig_h = img.size
 	img_array = np.array(img)
@@ -389,7 +395,7 @@ def run_one(
 		if illum is not None:
 			illum_name = f"{upload_id}-illumination.png"
 			Image.fromarray(illum, mode="L").save(cache_dir / illum_name)
-			illumination_map_url = f"/cache/{illum_name}"
+			illumination_map_url = f"{url_prefix}/{illum_name}"
 
 	items: list[tuple[str, np.ndarray, int, int, int, int]] = []
 	for label, class_ids in _TARGET:
@@ -531,7 +537,7 @@ def run_one(
 		if cfg["generate_cropped"]:
 			crop_name = f"{upload_id}-{label}-cropped.png".replace(" ", "_")
 			apply_mask_crop_tight(img, alpha, min_x, min_y, max_x, max_y, cache_dir / crop_name)
-			cropped_url = f"/cache/{crop_name}"
+			cropped_url = f"{url_prefix}/{crop_name}"
 		texture_angle = 0.0
 		try:
 			texture_angle = dominant_texture_angle(img_array, mask)
@@ -546,7 +552,7 @@ def run_one(
 				"width": ((max_x - min_x + 1) / orig_w) * 100.0,
 				"height": ((max_y - min_y + 1) / orig_h) * 100.0,
 			},
-			"maskUrl": f"/cache/{mask_name}",
+			"maskUrl": f"{url_prefix}/{mask_name}",
 			"croppedUrl": cropped_url,
 			"textureAngle": texture_angle,
 		})
@@ -564,7 +570,7 @@ def run_one(
 	return {
 		"uploadId": upload_id,
 		"detections": detections,
-		"segmentationMapUrl": f"/cache/{seg_map_name}",
+		"segmentationMapUrl": f"{url_prefix}/{seg_map_name}",
 		"segmentationLabels": segmentation_labels,
 		"illuminationMapUrl": illumination_map_url,
 	}
@@ -575,6 +581,7 @@ def main():
 	parser.add_argument("--image", required=False)
 	parser.add_argument("--upload-id", required=False)
 	parser.add_argument("--cache-dir", required=False)
+	parser.add_argument("--url-prefix", required=False)
 	parser.add_argument("--daemon", action="store_true", help="Keep model loaded; read jobs from stdin (JSON lines), write results to stdout")
 	args = parser.parse_args()
 
@@ -595,6 +602,7 @@ def main():
 				image_path = Path(job["image"])
 				upload_id = str(job["uploadId"])
 				cache_dir = Path(job["cacheDir"])
+				url_prefix = str(job.get("urlPrefix") or "/cache")
 			except (KeyError, TypeError, ValueError) as e:
 				sys.stdout.write(json.dumps({"error": str(e), "uploadId": None}) + "\n")
 				sys.stdout.flush()
@@ -604,7 +612,14 @@ def main():
 				sys.stdout.flush()
 				continue
 			try:
-				out = run_one(image_path, upload_id, cache_dir, processor, model)
+				out = run_one(
+					image_path,
+					upload_id,
+					cache_dir,
+					url_prefix,
+					processor,
+					model,
+				)
 				sys.stdout.write(json.dumps(out) + "\n")
 				sys.stdout.flush()
 			except Exception as e:
@@ -617,8 +632,9 @@ def main():
 		parser.error("--image, --upload-id, and --cache-dir are required when not using --daemon")
 	image_path = Path(args.image)
 	cache_dir = Path(args.cache_dir)
+	url_prefix = args.url_prefix or "/cache"
 	processor, model = load_model()
-	out = run_one(image_path, args.upload_id, cache_dir, processor, model)
+	out = run_one(image_path, args.upload_id, cache_dir, url_prefix, processor, model)
 	sys.stdout.write(json.dumps(out))
 	sys.stdout.flush()
 

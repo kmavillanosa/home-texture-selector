@@ -6,6 +6,9 @@ import { spawn, type ChildProcess } from 'child_process'
 import type { DetectionResult } from '../common/types'
 
 const CACHE_DIR = path.join(process.cwd(), 'cache')
+const CACHE_URL_PREFIX = '/cache'
+const SAMPLE_CACHE_DIR = path.join(process.cwd(), 'samples')
+const SAMPLE_CACHE_URL_PREFIX = '/samples'
 const CACHE_VERSION = 10
 const CLEANUP_INTERVAL_MINUTES = Number(
 	process.env.CLEANUP_INTERVAL_MINUTES ?? 30,
@@ -26,6 +29,8 @@ type PythonResult = Pick<
 type DaemonJob = {
 	imagePath: string
 	uploadId: string
+	cacheDir: string
+	urlPrefix: string
 	resolve: (value: PythonResult) => void
 	reject: (reason: Error) => void
 }
@@ -47,6 +52,9 @@ export class SegmentService {
 		if (!fs.existsSync(CACHE_DIR)) {
 			fs.mkdirSync(CACHE_DIR, { recursive: true })
 		}
+		if (!fs.existsSync(SAMPLE_CACHE_DIR)) {
+			fs.mkdirSync(SAMPLE_CACHE_DIR, { recursive: true })
+		}
 		this.scheduleCleanup()
 	}
 
@@ -63,12 +71,18 @@ export class SegmentService {
 			return { uploadId: id, detections: [] }
 		}
 
-		const cached = this.readCachedResult(id)
-		if (cached) return cached
+		const cacheConfig = this.getCacheConfig(id)
+		const shouldBypassCache =
+			cacheConfig.dir === SAMPLE_CACHE_DIR &&
+			this.isSampleCacheStale(id, imagePath)
+		if (!shouldBypassCache) {
+			const cached = this.readCachedResult(id, cacheConfig.dir)
+			if (cached) return cached
+		}
 
 		try {
 			const pythonResult = USE_PYTHON_SEGMENTATION
-				? await this.runPythonSegmentation(imagePath, id)
+				? await this.runPythonSegmentation(imagePath, id, cacheConfig)
 				: { detections: [] }
 			const result: DetectionResult = {
 				uploadId: id,
@@ -77,7 +91,7 @@ export class SegmentService {
 				segmentationLabels: pythonResult.segmentationLabels,
 				illuminationMapUrl: pythonResult.illuminationMapUrl,
 			}
-			this.writeCachedResult(id, result)
+			this.writeCachedResult(id, result, cacheConfig.dir)
 			return result
 		} catch (err) {
 			console.error('SegmentService.segment error', err)
@@ -92,20 +106,22 @@ export class SegmentService {
 	private async runPythonSegmentation(
 		imagePath: string,
 		uploadId: string,
+		cacheConfig: { dir: string; urlPrefix: string },
 	): Promise<PythonResult> {
 		if (!fs.existsSync(PYTHON_SCRIPT)) {
 			throw new Error(`Python segmentation script missing: ${PYTHON_SCRIPT}`)
 		}
 		if (USE_SEGMENTATION_DAEMON) {
-			return this.runViaDaemon(imagePath, uploadId)
+			return this.runViaDaemon(imagePath, uploadId, cacheConfig)
 		}
-		return this.runPythonOneShot(imagePath, uploadId)
+		return this.runPythonOneShot(imagePath, uploadId, cacheConfig)
 	}
 
 	/** Spawn per-request Python process (used when daemon is disabled). */
 	private runPythonOneShot(
 		imagePath: string,
 		uploadId: string,
+		cacheConfig: { dir: string; urlPrefix: string },
 	): Promise<PythonResult> {
 		return new Promise<PythonResult>((resolve, reject) => {
 			const proc = spawn(
@@ -117,7 +133,9 @@ export class SegmentService {
 					'--upload-id',
 					uploadId,
 					'--cache-dir',
-					CACHE_DIR,
+					cacheConfig.dir,
+					'--url-prefix',
+					cacheConfig.urlPrefix,
 				],
 				{ windowsHide: true, env: process.env },
 			)
@@ -171,9 +189,20 @@ export class SegmentService {
 	}
 
 	/** Queue job and run via persistent daemon (model stays loaded). */
-	private runViaDaemon(imagePath: string, uploadId: string): Promise<PythonResult> {
+	private runViaDaemon(
+		imagePath: string,
+		uploadId: string,
+		cacheConfig: { dir: string; urlPrefix: string },
+	): Promise<PythonResult> {
 		return new Promise<PythonResult>((resolve, reject) => {
-			this.pendingQueue.push({ imagePath, uploadId, resolve, reject })
+			this.pendingQueue.push({
+				imagePath,
+				uploadId,
+				cacheDir: cacheConfig.dir,
+				urlPrefix: cacheConfig.urlPrefix,
+				resolve,
+				reject,
+			})
 			this.ensureWorker()
 			this.processQueue()
 		})
@@ -183,7 +212,7 @@ export class SegmentService {
 		if (this.worker !== null) return
 		const proc = spawn(
 			PYTHON_BIN,
-			[PYTHON_SCRIPT, '--daemon', '--cache-dir', CACHE_DIR],
+			[PYTHON_SCRIPT, '--daemon'],
 			{ windowsHide: true, env: process.env, stdio: ['pipe', 'pipe', 'inherit'] },
 		)
 		this.worker = proc
@@ -286,32 +315,43 @@ export class SegmentService {
 			JSON.stringify({
 				image: job.imagePath,
 				uploadId: job.uploadId,
-				cacheDir: CACHE_DIR,
+				cacheDir: job.cacheDir,
+				urlPrefix: job.urlPrefix,
 			}) + '\n',
 		)
 	}
 
-	private getResultCachePath(uploadId: string) {
-		return path.join(CACHE_DIR, `${uploadId}-result.v${CACHE_VERSION}.json`)
+	private getResultCachePath(cacheDir: string, uploadId: string) {
+		return path.join(cacheDir, `${uploadId}-result.v${CACHE_VERSION}.json`)
 	}
 
-	private readCachedResult(uploadId: string): DetectionResult | null {
+	private readCachedResult(
+		uploadId: string,
+		cacheDir: string,
+	): DetectionResult | null {
 		try {
-			const p = this.getResultCachePath(uploadId)
+			const p = this.getResultCachePath(cacheDir, uploadId)
 			if (!fs.existsSync(p)) return null
 			const raw = fs.readFileSync(p, 'utf8')
 			const parsed = JSON.parse(raw) as DetectionResult
 			if (!parsed || parsed.uploadId !== uploadId) return null
+			if (cacheDir === SAMPLE_CACHE_DIR) {
+				return this.rewriteSampleUrls(parsed)
+			}
 			return parsed
 		} catch {
 			return null
 		}
 	}
 
-	private writeCachedResult(uploadId: string, result: DetectionResult) {
+	private writeCachedResult(
+		uploadId: string,
+		result: DetectionResult,
+		cacheDir: string,
+	) {
 		try {
 			void fs.promises.writeFile(
-				this.getResultCachePath(uploadId),
+				this.getResultCachePath(cacheDir, uploadId),
 				JSON.stringify(result),
 				'utf8',
 			)
@@ -343,6 +383,52 @@ export class SegmentService {
 		run()
 		const timer = setInterval(run, intervalMs)
 		timer.unref?.()
+	}
+
+	private getCacheConfig(uploadId: string) {
+		if (this.hasSampleResult(uploadId)) {
+			return { dir: SAMPLE_CACHE_DIR, urlPrefix: SAMPLE_CACHE_URL_PREFIX }
+		}
+		return { dir: CACHE_DIR, urlPrefix: CACHE_URL_PREFIX }
+	}
+
+	private hasSampleResult(uploadId: string): boolean {
+		try {
+			const resultPath = this.getResultCachePath(SAMPLE_CACHE_DIR, uploadId)
+			return fs.existsSync(resultPath)
+		} catch {
+			return false
+		}
+	}
+
+	private isSampleCacheStale(uploadId: string, imagePath: string | null): boolean {
+		if (!imagePath) return false
+		try {
+			const resultPath = this.getResultCachePath(SAMPLE_CACHE_DIR, uploadId)
+			if (!fs.existsSync(resultPath)) return false
+			const resultStat = fs.statSync(resultPath)
+			const imageStat = fs.statSync(imagePath)
+			return imageStat.mtimeMs > resultStat.mtimeMs
+		} catch {
+			return false
+		}
+	}
+
+	private rewriteSampleUrls(result: DetectionResult): DetectionResult {
+		const replaceUrl = (url?: string) => {
+			if (!url || !url.startsWith(`${CACHE_URL_PREFIX}/`)) return url
+			return `${SAMPLE_CACHE_URL_PREFIX}/${url.slice(CACHE_URL_PREFIX.length + 1)}`
+		}
+		return {
+			...result,
+			segmentationMapUrl: replaceUrl(result.segmentationMapUrl),
+			illuminationMapUrl: replaceUrl(result.illuminationMapUrl),
+			detections: result.detections.map((d) => ({
+				...d,
+				maskUrl: replaceUrl(d.maskUrl),
+				croppedUrl: replaceUrl(d.croppedUrl),
+			})),
+		}
 	}
 }
 

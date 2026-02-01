@@ -1,4 +1,4 @@
-# Room Visualizer – Specification
+# Anyo Haus Studio – Specification
 
 A Roomvo-style web tool for uploading room photos, detecting surfaces (walls, floors, small objects), and applying materials in real time with realistic rendering.
 

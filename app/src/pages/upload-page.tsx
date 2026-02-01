@@ -20,6 +20,8 @@ export function UploadPage() {
 	const [previewUrls, setPreviewUrls] = useState<string[]>([])
 	const [error, setError] = useState<string | null>(null)
 	const [isAnalyzing, setIsAnalyzing] = useState(false)
+	const [progressTotal, setProgressTotal] = useState(0)
+	const [progressDone, setProgressDone] = useState(0)
 	const runningRef = useRef(false)
 
 	const handleFileSelect = useCallback((selected: File[]) => {
@@ -65,6 +67,8 @@ export function UploadPage() {
 		if (files.length === 0 || runningRef.current) return
 		runningRef.current = true
 		setIsAnalyzing(true)
+		setProgressTotal(files.length)
+		setProgressDone(0)
 		setError(null)
 		;(async () => {
 			try {
@@ -81,6 +85,7 @@ export function UploadPage() {
 						detectionResult: result,
 						appliedMaterials: {},
 					})
+					setProgressDone(i + 1)
 					if (i === 0) {
 						setRoomImage(roomImageUrl)
 						setDetectionResult(result)
@@ -114,6 +119,8 @@ export function UploadPage() {
 				setError(err instanceof Error ? err.message : 'Upload or analysis failed.')
 			} finally {
 				setIsAnalyzing(false)
+				setProgressTotal(0)
+				setProgressDone(0)
 				runningRef.current = false
 			}
 		})()
@@ -137,14 +144,14 @@ export function UploadPage() {
 			)}
 			<div className="relative z-10 w-full max-w-3xl">
 			<div className="mb-8">
-				<p className="text-sm font-medium text-teal-600 dark:text-teal-400">
-					Step 1
+				<p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+					Upload your room
 				</p>
 				<h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-					Upload your room
+					Add a room photo
 				</h1>
 				<p className="mt-3 text-slate-600 dark:text-slate-400">
-					Drop or select a photo. We'll detect walls, floors, and surfaces automatically.
+					Drop or choose a photo and we’ll detect walls, floors, and surfaces.
 					JPEG or PNG, up to {MAX_SIZE_MB}MB.
 				</p>
 			</div>
@@ -158,14 +165,39 @@ export function UploadPage() {
 			)}
 			{isAnalyzing && (
 				<div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-					<div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200/80 bg-white px-10 py-8 shadow-lg dark:border-slate-600 dark:bg-slate-800">
-						<span className="h-12 w-12 animate-spin rounded-full border-2 border-slate-200 border-t-teal-500" />
+					<div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-200/80 bg-white px-10 py-8 shadow-lg dark:border-slate-600 dark:bg-slate-800">
+						<span className="h-12 w-12 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-500" />
 						<p className="text-base font-semibold text-slate-800 dark:text-slate-100">
 							Analyzing your room…
 						</p>
 						<p className="text-sm text-slate-500 dark:text-slate-400">
 							Detecting walls, floors & surfaces
 						</p>
+						<div className="w-full">
+							<div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+								<span>
+									Scene {Math.min(progressDone + 1, progressTotal)} of{' '}
+									{Math.max(progressTotal, 1)}
+								</span>
+								<span>
+									{progressTotal > 0
+										? Math.round((progressDone / progressTotal) * 100)
+										: 0}
+									%
+								</span>
+							</div>
+							<div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+								<div
+									className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+									style={{
+										width:
+											progressTotal > 0
+												? `${(progressDone / progressTotal) * 100}%`
+												: '0%',
+									}}
+								/>
+							</div>
+						</div>
 					</div>
 				</div>
 			)}

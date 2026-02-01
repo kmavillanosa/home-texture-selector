@@ -72,3 +72,16 @@ export interface Project {
 	createdAt: string
 	updatedAt: string
 }
+
+export interface SampleProject {
+	id: string
+	uploadId: string
+	name: string
+	roomImageUrl: string
+}
+
+export interface SampleGroup {
+	groupId: string
+	name: string
+	samples: SampleProject[]
+}

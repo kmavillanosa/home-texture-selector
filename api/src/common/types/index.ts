@@ -1,5 +1,5 @@
 /**
- * Shared DTOs and types for Room Visualizer API
+ * Shared DTOs and types for Anyo Haus Studio API
  */
 
 /** Hint for how to draw the overlay: trace the object shape (e.g. circle for plate, rectangle for book). */
@@ -77,6 +77,19 @@ export interface ProjectDto {
 	scenes?: SceneDto[]
 	createdAt: string
 	updatedAt: string
+}
+
+export interface SampleProjectDto {
+	id: string
+	uploadId: string
+	name: string
+	roomImageUrl: string
+}
+
+export interface SampleGroupDto {
+	groupId: string
+	name: string
+	samples: SampleProjectDto[]
 }
 
 export interface CreateProjectDto {

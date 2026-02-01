@@ -1,6 +1,6 @@
 /** Max long edge for upload (speeds upload + API decode and inference). */
-const MAX_DIMENSION = 1920
-const JPEG_QUALITY = 0.88
+const MAX_DIMENSION = 1440
+const JPEG_QUALITY = 0.82
 
 /**
  * Resize image file to max dimension on long edge, output as JPEG.

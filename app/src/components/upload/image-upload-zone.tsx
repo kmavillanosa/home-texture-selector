@@ -41,7 +41,7 @@ export function ImageUploadZone({
 			onDrop={handleDrop}
 			onDragOver={handleDragOver}
 			onKeyDown={(e) => e.key === 'Enter' && handleClick()}
-			className="flex min-h-[240px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white p-10 transition-colors hover:border-teal-400 hover:bg-teal-50/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500 dark:border-slate-600 dark:bg-slate-800/50 dark:hover:border-teal-500 dark:hover:bg-teal-900/20"
+			className="flex min-h-[240px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white p-10 transition-colors hover:border-emerald-400 hover:bg-emerald-50/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:border-slate-600 dark:bg-slate-800/50 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/20"
 		>
 			<input
 				ref={inputRef}
@@ -54,7 +54,7 @@ export function ImageUploadZone({
 			/>
 			{files.length > 0 ? (
 				<>
-					<div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400">
+					<div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400">
 						<ImageIcon className="h-7 w-7" />
 					</div>
 					<p className="mt-4 font-semibold text-slate-800 dark:text-slate-100">

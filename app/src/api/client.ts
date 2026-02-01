@@ -74,6 +74,16 @@ export async function listProjects(): Promise<import('../types').Project[]> {
 	return request('/projects')
 }
 
+export async function listSamples(): Promise<import('../types').SampleProject[]> {
+	return request('/projects/samples')
+}
+
+export async function listSampleGroups(): Promise<
+	import('../types').SampleGroup[]
+> {
+	return request('/projects/sample-groups')
+}
+
 export async function getProject(id: string): Promise<import('../types').Project> {
 	return request(`/projects/${id}`)
 }

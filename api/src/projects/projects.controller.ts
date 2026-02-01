@@ -24,6 +24,16 @@ export class ProjectsController {
 		return this.projectsService.list()
 	}
 
+	@Get('samples')
+	listSamples() {
+		return this.projectsService.listSamples()
+	}
+
+	@Get('sample-groups')
+	listSampleGroups() {
+		return this.projectsService.listSampleGroups()
+	}
+
 	@Get('sample')
 	async getSample() {
 		const project = await this.projectsService.getOrCreateSample()
@@ -32,8 +42,8 @@ export class ProjectsController {
 	}
 
 	@Get(':id')
-	get(@Param('id') id: string) {
-		const project = this.projectsService.get(id)
+	async get(@Param('id') id: string) {
+		const project = await this.projectsService.get(id)
 		if (!project) throw new NotFoundException('Project not found')
 		return project
 	}

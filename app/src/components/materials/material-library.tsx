@@ -83,6 +83,7 @@ export function MaterialLibrary() {
 	const applyMaterial = useVisualizerStore((s) => s.applyMaterial)
 	const clearMaterial = useVisualizerStore((s) => s.clearMaterial)
 	const appliedMaterials = useVisualizerStore((s) => s.appliedMaterials)
+	const [applyAllSegments, setApplyAllSegments] = useState(true)
 	const selectedDetection =
 		detectionResult?.detections.find((d) => d.label === selectedRegionId) ?? null
 	const canApply = Boolean(selectedDetection?.maskUrl)
@@ -143,7 +144,14 @@ export function MaterialLibrary() {
 		const regionId =
 			selectedRegionId ?? pickRegionIdForCategory(category, detectionMeta)
 		if (!regionId) return
-		applyMaterial(regionId, material)
+		if (applyAllSegments) {
+			const base = getBaseLabel(regionId)
+			detectionResult?.detections
+				.filter((d) => getBaseLabel(d.label) === base)
+				.forEach((d) => applyMaterial(d.label, material))
+		} else {
+			applyMaterial(regionId, material)
+		}
 		setSelectedRegionId(regionId)
 		// Photorealistic render (local GPU diffusion)
 		const detection = detectionResult?.detections.find((d) => d.label === regionId)
@@ -164,14 +172,14 @@ export function MaterialLibrary() {
 	}
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="shrink-0 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800">
+		<div className="flex min-h-0 flex-1 flex-col bg-[#fdfbf7] dark:bg-slate-950">
+			<div className="shrink-0 border-b border-slate-200 bg-[#fdfbf7] px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950">
 				<input
 					type="search"
 					placeholder="Search…"
 					value={search}
 					onChange={(e) => setSearch(e.target.value)}
-					className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs placeholder:text-slate-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+					className="w-full rounded-lg border border-slate-200 bg-white/90 px-2.5 py-1.5 text-xs placeholder:text-slate-400 transition-colors focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
 				/>
 				<div className="mt-2 flex flex-wrap gap-1.5">
 					{visibleCategories.map((c) => (
@@ -181,7 +189,7 @@ export function MaterialLibrary() {
 							onClick={() => handleCategoryClick(c.value)}
 							className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
 								category === c.value
-									? 'bg-teal-600 text-white dark:bg-teal-600'
+									? 'bg-emerald-600 text-white dark:bg-emerald-600'
 									: 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
 							}`}
 						>
@@ -190,9 +198,9 @@ export function MaterialLibrary() {
 					))}
 				</div>
 				{selectedRegionId && (
-					<div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-800/80">
+					<div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-800/80">
 						<span className="truncate text-[11px] text-slate-600 dark:text-slate-400">
-							To <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedRegionId}</span>
+							To <span className="font-semibold text-slate-800 dark:text-slate-200">{getBaseLabel(selectedRegionId)}</span>
 						</span>
 						<button
 							type="button"
@@ -203,6 +211,28 @@ export function MaterialLibrary() {
 							Reset
 						</button>
 					</div>
+				)}
+				{selectedRegionId && (
+					<label className="mt-2 flex items-center justify-between rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-1.5 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+						<span>Apply to all segments</span>
+						<button
+							type="button"
+							role="switch"
+							aria-checked={applyAllSegments}
+							onClick={() => setApplyAllSegments((prev) => !prev)}
+							className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+								applyAllSegments
+									? 'bg-emerald-600'
+									: 'bg-slate-300 dark:bg-slate-600'
+							}`}
+						>
+							<span
+								className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+									applyAllSegments ? 'translate-x-4' : 'translate-x-1'
+								}`}
+							/>
+						</button>
+					</label>
 				)}
 			{selectedRegionId && !canApply && (
 				<div className="mt-2 rounded-lg border border-orange-200/80 bg-orange-50/80 px-2.5 py-1.5 text-[11px] text-orange-700 dark:border-orange-900/60 dark:bg-orange-900/20 dark:text-orange-200">

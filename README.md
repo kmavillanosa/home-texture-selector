@@ -1,6 +1,6 @@
-# Room Visualizer (home-texture-selector)
+# Anyo Haus Studio (home-texture-selector)
 
-An interactive Room Visualizer tool similar to Roomvo: upload a photo of your room, get automatic wall/floor (and small-object) detection, then try flooring, paint, tiles, wallpapers, and furniture in real time with undo/redo, zoom/pan, save/share, and downloadable preview.
+An interactive room materials studio similar to Roomvo: upload a photo of your room, get automatic wall/floor (and small-object) detection, then try flooring, paint, tiles, wallpapers, and furniture in real time with undo/redo, zoom/pan, save/share, and downloadable preview.
 
 ## Stack
 

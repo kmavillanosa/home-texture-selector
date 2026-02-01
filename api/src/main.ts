@@ -82,6 +82,7 @@ async function bootstrap() {
 	app.enableCors({ origin: true }) // allow frontend dev server
 	app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' })
 	app.useStaticAssets(join(process.cwd(), 'cache'), { prefix: '/cache/' })
+	app.useStaticAssets(join(process.cwd(), 'samples'), { prefix: '/samples/' })
 	app.useStaticAssets(join(process.cwd(), 'textures'), { prefix: '/textures/' })
 
 	const port = Number(process.env.PORT ?? 3000)

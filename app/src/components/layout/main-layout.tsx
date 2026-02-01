@@ -7,6 +7,7 @@ export function MainLayout() {
 	const isLanding = pathname === '/'
 	const isStudio = pathname === '/visualizer'
 	const isUpload = pathname === '/upload'
+	const isSamples = pathname === '/samples'
 	const hideHeader = useVisualizerStore((s) => s.hideHeader)
 
 	return (
@@ -15,10 +16,10 @@ export function MainLayout() {
 				isStudio || isUpload ? 'h-screen overflow-hidden' : 'min-h-screen'
 			}`}
 		>
-			{!isLanding && !isStudio && !hideHeader && <Header />}
+		{!isLanding && !hideHeader && <Header />}
 			<main
 				className={
-					isLanding
+					isLanding || isSamples
 						? 'flex min-h-screen flex-1 flex-col'
 						: isStudio
 							? 'flex min-h-0 flex-1 flex-col overflow-y-auto'

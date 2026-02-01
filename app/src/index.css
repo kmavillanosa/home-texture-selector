@@ -10,13 +10,13 @@
 	text-rendering: optimizeLegibility;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
-	--color-primary: #0d9488;
-	--color-primary-hover: #0f766e;
-	--color-surface: #f1f5f9;
+	--color-primary: #2f855a;
+	--color-primary-hover: #276749;
+	--color-surface: #f9f6ef;
 	--color-surface-dark: #0f172a;
-	--color-panel: #ffffff;
+	--color-panel: #fdfbf7;
 	--color-panel-dark: #1e293b;
-	--color-border: #e2e8f0;
+	--color-border: #e7ded2;
 	--color-border-dark: #334155;
 	--radius-sm: 0.375rem;
 	--radius-md: 0.5rem;
@@ -41,8 +41,8 @@ body {
 
 /* Landing page: planning / interior design grid */
 .landing-grid {
-	--grid-line: rgba(148, 163, 184, 0.25);
-	--grid-major: rgba(148, 163, 184, 0.35);
+	--grid-line: rgba(120, 140, 125, 0.22);
+	--grid-major: rgba(120, 140, 125, 0.32);
 	background-color: var(--color-surface);
 	background-image:
 		linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
