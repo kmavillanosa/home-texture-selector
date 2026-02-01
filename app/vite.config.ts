@@ -6,6 +6,7 @@ const apiPort = process.env.API_PORT ?? 3000
 const apiTarget = `http://localhost:${apiPort}`
 
 export default defineConfig({
+	base: process.env.BASE_URL ?? '/',
 	plugins: [react(), tailwindcss()],
 	server: {
 		port: 5173,

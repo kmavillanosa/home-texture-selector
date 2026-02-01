@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: home-texture-api
+    env: node
+    plan: free
+    rootDir: api
+    buildCommand: |
+      npm install
+      pip install -r python/requirements.txt
+      npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
