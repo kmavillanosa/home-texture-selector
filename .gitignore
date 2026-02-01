@@ -8,6 +8,7 @@ coverage/
 .nuxt/
 .output/
 .parcel-cache/
+.venv/
 *.log
 npm-debug.log*
 yarn-debug.log*
