@@ -7,8 +7,9 @@ import { VisualizerPage } from './pages/visualizer-page'
 import './App.css'
 
 function App() {
+	const baseUrl = import.meta.env.BASE_URL ?? '/'
 	return (
-		<BrowserRouter>
+		<BrowserRouter basename={baseUrl}>
 			<Routes>
 				<Route element={<MainLayout />}>
 					<Route path="/" element={<HomePage />} />
