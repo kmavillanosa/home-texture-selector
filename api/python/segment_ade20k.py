@@ -322,6 +322,7 @@ _TARGET = [
 	("Rug", [29]),
 	("Cabinet", [11]),
 	("Shelf", [25]),
+	("Counter", [46]),
 	("Countertop", [71]),
 ]
 _TARGET = [(label, [i - 1 for i in ids]) for (label, ids) in _TARGET]

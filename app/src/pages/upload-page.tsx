@@ -143,71 +143,94 @@ export function UploadPage() {
 				</div>
 			)}
 			<div className="relative z-10 w-full max-w-3xl">
-			<div className="mb-8">
-				<p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-					Upload your room
-				</p>
-				<h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-					Add a room photo
-				</h1>
-				<p className="mt-3 text-slate-600 dark:text-slate-400">
-					Drop or choose a photo and we’ll detect walls, floors, and surfaces.
-					JPEG or PNG, up to {MAX_SIZE_MB}MB.
-				</p>
-			</div>
-			{!isAnalyzing && (
-				<ImageUploadZone
-					files={files}
-					onFileSelect={handleFileSelect}
-					accept={ALLOWED_TYPES.join(',')}
-					maxSizeBytes={MAX_SIZE_MB * 1024 * 1024}
-				/>
-			)}
-			{isAnalyzing && (
-				<div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-					<div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-200/80 bg-white px-10 py-8 shadow-lg dark:border-slate-600 dark:bg-slate-800">
-						<span className="h-12 w-12 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-500" />
-						<p className="text-base font-semibold text-slate-800 dark:text-slate-100">
-							Analyzing your room…
+				<div className="mb-8">
+					<p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+						Upload your room
+					</p>
+					<h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+						Add a room photo
+					</h1>
+					<p className="mt-3 text-slate-600 dark:text-slate-400">
+						Drop or choose a photo and we'll detect walls, floors, and surfaces.
+						JPEG or PNG, up to {MAX_SIZE_MB}MB.
+					</p>
+					<div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+						<p className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-300">
+							Tips for better results:
 						</p>
-						<p className="text-sm text-slate-500 dark:text-slate-400">
-							Detecting walls, floors & surfaces
-						</p>
-						<div className="w-full">
-							<div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-								<span>
-									Scene {Math.min(progressDone + 1, progressTotal)} of{' '}
-									{Math.max(progressTotal, 1)}
-								</span>
-								<span>
-									{progressTotal > 0
-										? Math.round((progressDone / progressTotal) * 100)
-										: 0}
-									%
-								</span>
-							</div>
-							<div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-								<div
-									className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-									style={{
-										width:
-											progressTotal > 0
-												? `${(progressDone / progressTotal) * 100}%`
-												: '0%',
-									}}
-								/>
+						<ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+							<li className="flex items-start gap-2">
+								<span className="mt-0.5 text-emerald-500">✓</span>
+								<span>Good lighting helps — natural daylight works best</span>
+							</li>
+							<li className="flex items-start gap-2">
+								<span className="mt-0.5 text-emerald-500">✓</span>
+								<span>Make sure walls and surfaces are clearly visible</span>
+							</li>
+							<li className="flex items-start gap-2">
+								<span className="mt-0.5 text-emerald-500">✓</span>
+								<span>Avoid extreme shadows or overly bright spots</span>
+							</li>
+							<li className="flex items-start gap-2">
+								<span className="mt-0.5 text-emerald-500">✓</span>
+								<span>Take the photo from a straight angle if possible</span>
+							</li>
+						</ul>
+					</div>
+				</div>
+				{!isAnalyzing && (
+					<ImageUploadZone
+						files={files}
+						onFileSelect={handleFileSelect}
+						accept={ALLOWED_TYPES.join(',')}
+						maxSizeBytes={MAX_SIZE_MB * 1024 * 1024}
+					/>
+				)}
+				{isAnalyzing && (
+					<div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+						<div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-200/80 bg-white px-10 py-8 shadow-lg dark:border-slate-600 dark:bg-slate-800">
+							<span className="h-12 w-12 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-500" />
+							<p className="text-base font-semibold text-slate-800 dark:text-slate-100">
+								Analyzing your room…
+							</p>
+							<p className="text-sm text-slate-500 dark:text-slate-400">
+								Detecting walls, floors & surfaces
+							</p>
+							<div className="w-full">
+								<div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+									<span>
+										Scene {Math.min(progressDone + 1, progressTotal)} of{' '}
+										{Math.max(progressTotal, 1)}
+									</span>
+									<span>
+										{progressTotal > 0
+											? Math.round((progressDone / progressTotal) * 100)
+											: 0}
+										%
+									</span>
+								</div>
+								<div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+									<div
+										className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+										style={{
+											width:
+												progressTotal > 0
+													? `${(progressDone / progressTotal) * 100}%`
+													: '0%',
+										}}
+									/>
+								</div>
 							</div>
 						</div>
 					</div>
-				</div>
-			)}
-			{error && (
-				<div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-900/20">
-					<p className="text-sm font-medium text-red-700 dark:text-red-300" role="alert">
-						{error}
-					</p>
-				</div>
-			)}
+				)}
+				{error && (
+					<div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-900/20">
+						<p className="text-sm font-medium text-red-700 dark:text-red-300" role="alert">
+							{error}
+						</p>
+					</div>
+				)}
 			</div>
 		</div>
 	)

@@ -22,6 +22,7 @@ const CATEGORY_BY_LABEL: Record<
 	Ceiling: ['paint'],
 	Backsplash: ['tiles'],
 	Countertop: ['tiles'],
+	Counter: ['tiles'],
 	Cabinet: ['furniture'],
 	Shelf: ['furniture'],
 	Door: ['paint'],
@@ -58,7 +59,7 @@ const pickRegionIdForCategory = (
 		flooring: ['Floor', 'Rug'],
 		paint: ['Wall', 'Ceiling', 'Door'],
 		wallpapers: ['Wall'],
-		tiles: ['Floor', 'Wall', 'Countertop'],
+		tiles: ['Floor', 'Wall', 'Countertop', 'Counter'],
 		furniture: ['Cabinet', 'Shelf', 'Sofa', 'Chair', 'Table', 'Bed'],
 	}
 	const preferred = prefs[category] ?? []
@@ -78,13 +79,15 @@ export function MaterialLibrary() {
 	const selectedRegionId = useVisualizerStore((s) => s.selectedRegionId)
 	const setSelectedRegionId = useVisualizerStore((s) => s.setSelectedRegionId)
 	const setSelectedMaterial = useVisualizerStore((s) => s.setSelectedMaterial)
+	const selectedMaterial = useVisualizerStore((s) => s.selectedMaterial)
 	const roomImageUrl = useVisualizerStore((s) => s.roomImageUrl)
 	const renderedImageUrl = useVisualizerStore((s) => s.renderedImageUrl)
 	const setRenderedImageUrl = useVisualizerStore((s) => s.setRenderedImageUrl)
 	const applyMaterial = useVisualizerStore((s) => s.applyMaterial)
+	const setMaterialRotation = useVisualizerStore((s) => s.setMaterialRotation)
 	const clearMaterial = useVisualizerStore((s) => s.clearMaterial)
 	const appliedMaterials = useVisualizerStore((s) => s.appliedMaterials)
-	const [applyAllSegments, setApplyAllSegments] = useState(true)
+	const [textureRotation, setTextureRotation] = useState(0)
 	const selectedDetection =
 		detectionResult?.detections.find((d) => d.label === selectedRegionId) ?? null
 	const canApply = Boolean(selectedDetection?.maskUrl)
@@ -94,6 +97,9 @@ export function MaterialLibrary() {
 		baseLabel: getBaseLabel(label),
 	}))
 	const selectedRegionBase = selectedRegionId ? getBaseLabel(selectedRegionId) : null
+	const selectedApplied = selectedRegionId
+		? appliedMaterials[selectedRegionId] ?? null
+		: null
 	const scopeLabels = selectedRegionBase
 		? [selectedRegionBase]
 		: detectionMeta.map((d) => d.baseLabel)
@@ -119,6 +125,22 @@ export function MaterialLibrary() {
 			return
 		}
 	}, [allowedCategories, category])
+
+	useEffect(() => {
+		if (!selectedRegionId) return
+		if (selectedApplied?.assetUrl) {
+			setTextureRotation(selectedApplied.rotation ?? 0)
+			return
+		}
+		if (selectedMaterial?.assetUrl) {
+			setTextureRotation(0)
+		}
+	}, [
+		selectedRegionId,
+		selectedApplied?.assetUrl,
+		selectedApplied?.rotation,
+		selectedMaterial?.id,
+	])
 
 	const materials = useMemo(() => {
 		const filtered =
@@ -157,14 +179,11 @@ export function MaterialLibrary() {
 		const regionId =
 			selectedRegionId ?? pickRegionIdForCategory(category, detectionMeta)
 		if (!regionId) return
-		if (applyAllSegments) {
-			const base = getBaseLabel(regionId)
-			detectionResult?.detections
-				.filter((d) => getBaseLabel(d.label) === base)
-				.forEach((d) => applyMaterial(d.label, material))
-		} else {
-			applyMaterial(regionId, material)
-		}
+		// Always apply to all segments of the same category
+		const base = getBaseLabel(regionId)
+		detectionResult?.detections
+			.filter((d) => getBaseLabel(d.label) === base)
+			.forEach((d) => applyMaterial(d.label, material, textureRotation))
 		setSelectedRegionId(regionId)
 		// Photorealistic render (local GPU diffusion)
 		const detection = detectionResult?.detections.find((d) => d.label === regionId)
@@ -241,7 +260,13 @@ export function MaterialLibrary() {
 						</span>
 						<button
 							type="button"
-							onClick={() => clearMaterial(selectedRegionId)}
+							onClick={() => {
+								// Clear all segments of the same category
+								const base = getBaseLabel(selectedRegionId)
+								detectionResult?.detections
+									.filter((d) => getBaseLabel(d.label) === base)
+									.forEach((d) => clearMaterial(d.label))
+							}}
 							disabled={!appliedMaterials[selectedRegionId]}
 							className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-200"
 						>
@@ -249,27 +274,33 @@ export function MaterialLibrary() {
 						</button>
 					</div>
 				)}
-				{selectedRegionId && (
-					<label className="mt-2 flex items-center justify-between rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-1.5 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
-						<span>Apply to all surfaces</span>
-						<button
-							type="button"
-							role="switch"
-							aria-checked={applyAllSegments}
-							onClick={() => setApplyAllSegments((prev) => !prev)}
-							className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-								applyAllSegments
-									? 'bg-emerald-600'
-									: 'bg-slate-300 dark:bg-slate-600'
-							}`}
-						>
-							<span
-								className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-									applyAllSegments ? 'translate-x-4' : 'translate-x-1'
-								}`}
-							/>
-						</button>
-					</label>
+				{selectedRegionId && (selectedMaterial?.assetUrl || selectedApplied?.assetUrl) && (
+					<div className="mt-2 rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-2 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+						<div className="flex items-center justify-between gap-2">
+							<span>Texture rotation</span>
+							<span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+								{textureRotation}°
+							</span>
+						</div>
+						<input
+							type="range"
+							min={0}
+							max={180}
+							step={1}
+							value={textureRotation}
+							onChange={(event) => {
+								const next = Number(event.target.value)
+								setTextureRotation(next)
+								if (!selectedRegionId) return
+								// Always apply rotation to all segments of the same category
+								const base = getBaseLabel(selectedRegionId)
+								detectionResult?.detections
+									.filter((d) => getBaseLabel(d.label) === base)
+									.forEach((d) => setMaterialRotation(d.label, next))
+							}}
+							className="mt-2 w-full accent-emerald-600"
+						/>
+					</div>
 				)}
 			{selectedRegionId && !canApply && (
 				<div className="mt-2 rounded-lg border border-orange-200/80 bg-orange-50/80 px-2.5 py-1.5 text-[11px] text-orange-700 dark:border-orange-900/60 dark:bg-orange-900/20 dark:text-orange-200">

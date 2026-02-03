@@ -16,5 +16,7 @@ yarn-error.log*
 pnpm-debug.log*
 .env
 .env.*
+api/cache/
+api/uploads/
 .DS_Store
 Thumbs.db

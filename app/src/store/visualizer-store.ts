@@ -5,6 +5,7 @@ export interface AppliedMaterial {
 	materialId: string
 	color: string
 	assetUrl: string
+	rotation: number
 }
 
 interface VisualizerState {
@@ -26,7 +27,8 @@ interface VisualizerState {
 	setRenderedImageUrl: (url: string | null) => void
 	setAppliedMaterials: (materials: Record<string, AppliedMaterial>) => void
 	setHideHeader: (hide: boolean) => void
-	applyMaterial: (regionId: string, material: Material) => void
+	applyMaterial: (regionId: string, material: Material, rotation?: number) => void
+	setMaterialRotation: (regionId: string, rotation: number) => void
 	clearMaterial: (regionId: string) => void
 	clearAllMaterials: () => void
 	resetView: () => void
@@ -56,7 +58,7 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
 	setRenderedImageUrl: (renderedImageUrl) => set({ renderedImageUrl }),
 	setAppliedMaterials: (appliedMaterials) => set({ appliedMaterials }),
 	setHideHeader: (hideHeader) => set({ hideHeader }),
-	applyMaterial: (regionId, material) =>
+	applyMaterial: (regionId, material, rotation) =>
 		set((state) => ({
 			appliedMaterials: {
 				...state.appliedMaterials,
@@ -64,9 +66,21 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
 					materialId: material.id,
 					color: (material.metadata?.color as string) ?? '#e2e8f0',
 					assetUrl: material.assetUrl,
+					rotation: rotation ?? 0,
 				},
 			},
 		})),
+	setMaterialRotation: (regionId, rotation) =>
+		set((state) => {
+			const current = state.appliedMaterials[regionId]
+			if (!current) return state
+			return {
+				appliedMaterials: {
+					...state.appliedMaterials,
+					[regionId]: { ...current, rotation },
+				},
+			}
+		}),
 	clearMaterial: (regionId) =>
 		set((state) => {
 			const next = { ...state.appliedMaterials }

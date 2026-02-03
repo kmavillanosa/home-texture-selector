@@ -2,7 +2,10 @@ import { Link } from 'react-router-dom'
 
 export function HomePage() {
 	return (
-		<div className="landing-grid landing-grid-major relative min-h-screen w-full flex flex-col items-center justify-center px-4 py-16 sm:py-24">
+		<div className="relative min-h-screen w-full overflow-hidden bg-linear-to-b from-emerald-50 via-slate-50 to-white flex flex-col items-center justify-center px-4 py-16 sm:py-24 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
+			<div className="pointer-events-none absolute -left-32 top-16 h-80 w-80 rounded-full bg-emerald-200/40 blur-3xl dark:bg-emerald-900/30" />
+			<div className="pointer-events-none absolute -right-24 top-40 h-96 w-96 rounded-full bg-teal-200/30 blur-3xl dark:bg-teal-900/30" />
+			<div className="pointer-events-none absolute bottom-0 left-1/2 h-72 w-152 -translate-x-1/2 rounded-full bg-emerald-100/40 blur-3xl dark:bg-emerald-900/30" />
 			<div className="absolute right-6 top-6 flex items-center gap-3 text-sm font-semibold">
 				<Link
 					to="/login"
@@ -17,8 +20,12 @@ export function HomePage() {
 					Register
 				</Link>
 			</div>
-			<div className="mx-auto max-w-2xl text-center">
-				<h1 className="text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-5xl sm:leading-tight">
+			<div className="relative mx-auto max-w-2xl text-center">
+				<span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 shadow-sm dark:border-emerald-900/60 dark:bg-slate-900/70 dark:text-emerald-200">
+					<span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+					Instant room visualization
+				</span>
+				<h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-5xl sm:leading-tight">
 					Design your room in real materials
 				</h1>
 				<p className="mt-4 text-lg leading-relaxed text-slate-600 dark:text-slate-400">
@@ -39,20 +46,20 @@ export function HomePage() {
 						Try sample rooms
 					</Link>
 				</div>
-				<ul className="mt-16 grid max-w-xl gap-4 text-left text-slate-600 dark:text-slate-400 sm:mx-auto sm:max-w-2xl sm:grid-cols-2">
-					<li className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/60 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/40">
+				<ul className="mt-14 grid max-w-xl gap-4 text-left text-slate-600 dark:text-slate-400 sm:mx-auto sm:max-w-2xl sm:grid-cols-2">
+					<li className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
 						<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400" aria-hidden>✓</span>
 						<span>Auto wall & floor detection</span>
 					</li>
-					<li className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/60 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/40">
+					<li className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
 						<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400" aria-hidden>✓</span>
 						<span>Material library: flooring, paint, tiles, wallpapers</span>
 					</li>
-					<li className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/60 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/40">
+					<li className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
 						<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400" aria-hidden>✓</span>
 						<span>Real-time preview with zoom & pan</span>
 					</li>
-					<li className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/60 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/40">
+					<li className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
 						<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400" aria-hidden>✓</span>
 						<span>Save, share & download</span>
 					</li>
@@ -93,6 +100,36 @@ export function HomePage() {
 							Send a link or download a preview to keep everyone
 							synced on the final look.
 						</p>
+					</div>
+				</section>
+				<section className="mt-16 grid w-full gap-6 text-left sm:mt-20 sm:grid-cols-2">
+					<div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
+							Good for
+						</p>
+						<h2 className="mt-3 text-lg font-semibold text-slate-900 dark:text-white">
+							Teams who need quick visuals
+						</h2>
+						<ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-400">
+							<li>Homeowners planning a refresh</li>
+							<li>Interior designers presenting options</li>
+							<li>Real estate teams staging listings</li>
+							<li>Property managers standardizing units</li>
+						</ul>
+					</div>
+					<div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
+							Best for
+						</p>
+						<h2 className="mt-3 text-lg font-semibold text-slate-900 dark:text-white">
+							Finishes-first decision makers
+						</h2>
+						<ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-400">
+							<li>Design-build firms and contractors</li>
+							<li>Material vendors showcasing lines</li>
+							<li>Renovation planners comparing looks</li>
+							<li>Multifamily teams rolling out palettes</li>
+						</ul>
 					</div>
 				</section>
 				<section className="mt-16 w-full rounded-3xl border border-slate-200/70 bg-white/80 px-6 py-10 text-left shadow-sm dark:border-slate-800 dark:bg-slate-900/60 sm:mt-20 sm:px-10">

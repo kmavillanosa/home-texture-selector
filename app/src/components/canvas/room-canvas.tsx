@@ -18,7 +18,7 @@ const SELECTED_GROUP_FILL = 'rgba(14, 116, 144, 0.25)'
 const SELECTED_GROUP_STROKE = 'rgba(14, 116, 144, 0.85)'
 const SELECTED_GROUP_DASH = [6, 4]
 const COLOR_APPLY_ALPHA = 0.9
-const TEXTURE_SILHOUETTE_ALPHA = 0.6
+const TEXTURE_SILHOUETTE_ALPHA = 1.0
 const ILLUM_SILHOUETTE_ALPHA = 0.5
 const VISIBLE_LABELS = new Set([
 	'Wall',
@@ -464,9 +464,10 @@ export function RoomCanvas() {
 			textureImg: HTMLImageElement,
 			_roomImg: HTMLImageElement | null,
 			detection: Detection,
+			rotationDeg: number,
 		) => {
 			const illumKey = illuminationImage?.src ?? ''
-			const key = `${maskUrl}::tex::${textureUrl}::silhouette::${illumKey}`
+			const key = `${maskUrl}::tex::${textureUrl}::${rotationDeg}::silhouette::${illumKey}`
 			const existing = maskOverlayRef.current[key]
 			if (existing) return existing
 			const canvas = document.createElement('canvas')
@@ -482,9 +483,13 @@ export function RoomCanvas() {
 			const surfaceW = (detection.bbox.width / 100) * w
 			const surfaceH = (detection.bbox.height / 100) * h
 			const repeats = 4
-			const scaleX = surfaceW / (textureImg.naturalWidth * repeats)
-			const scaleY = surfaceH / (textureImg.naturalHeight * repeats)
-			const textureScale = Math.max(scaleX, scaleY, 0.1)
+			// Calculate tile size matching modal preview approach (same as getTextureTileSize)
+			const tileW = Math.max(surfaceW / repeats, 48)
+			const tileH = Math.max(surfaceH / repeats, 48)
+			// Use the smaller scale to maintain aspect ratio and match modal quality
+			const scaleX = tileW / textureImg.naturalWidth
+			const scaleY = tileH / textureImg.naturalHeight
+			const textureScale = Math.min(scaleX, scaleY, 1.0)
 
 			// Build a full-canvas texture fill (scaled + rotated), then optionally warp for floors
 			const textureCanvas = document.createElement('canvas')
@@ -493,18 +498,22 @@ export function RoomCanvas() {
 			const tctx = textureCanvas.getContext('2d')
 			if (!tctx) return canvas
 			const pattern = tctx.createPattern(textureImg, 'repeat')
+			const rotationRad = (rotationDeg * Math.PI) / 180
 			if (pattern && 'setTransform' in pattern) {
 				pattern.setTransform(
 					new DOMMatrix()
 						.scale(textureScale)
+						.rotate(rotationDeg)
 				)
 			}
 			tctx.save()
 			if (!('setTransform' in (pattern as unknown as { setTransform?: unknown })) && pattern) {
 				// Fallback: scale context if pattern.setTransform is unavailable
+				tctx.translate(w / 2, h / 2)
+				tctx.rotate(rotationRad)
 				tctx.scale(textureScale, textureScale)
 				tctx.fillStyle = pattern
-				tctx.fillRect(0, 0, w / textureScale, h / textureScale)
+				tctx.fillRect(-w / (2 * textureScale), -h / (2 * textureScale), w / textureScale, h / textureScale)
 			} else if (pattern) {
 				tctx.fillStyle = pattern
 				tctx.fillRect(0, 0, w, h)
@@ -537,7 +546,7 @@ export function RoomCanvas() {
 				.sort()
 				.map((key) => {
 					const m = appliedMaterials[key]
-					return `${key}:${m.materialId}:${m.assetUrl}:${m.color}`
+					return `${key}:${m.materialId}:${m.assetUrl}:${m.color}:${m.rotation ?? 0}`
 				})
 				.join('|')
 			const illumKey = illuminationImage?.src ?? ''
@@ -649,6 +658,7 @@ export function RoomCanvas() {
 									textureImages[applied.assetUrl],
 									loadedImage,
 									d,
+									applied.rotation ?? 0,
 								)
 								bctx.globalCompositeOperation = 'source-over'
 								bctx.globalAlpha = 1

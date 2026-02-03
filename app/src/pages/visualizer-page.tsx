@@ -37,6 +37,11 @@ export function VisualizerPage() {
   const fullscreenPreviewRef = useRef<HTMLDivElement | null>(null);
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
   const [fullscreenSize, setFullscreenSize] = useState({ width: 0, height: 0 });
+  const [previewImageNatural, setPreviewImageNatural] = useState({
+    width: 0,
+    height: 0,
+  });
+  const [hoveredModalLabel, setHoveredModalLabel] = useState<string | null>(null);
   const appliedMaterialsRef = useRef(appliedMaterials);
   const lastSelectedBaseRef = useRef<string | null>(null);
   const visibleDetections = useMemo(
@@ -48,10 +53,13 @@ export function VisualizerPage() {
   );
 
   const previewImageUrl = renderedImageUrl ?? roomImageUrl;
-  const previewMaskUrl = selectedRegionId
-    ? detectionResult?.detections.find((d) => d.label === selectedRegionId)?.maskUrl ??
-      null
-    : null;
+  const selectedBase = selectedRegionId ? getBaseLabel(selectedRegionId) : null;
+  const selectedBaseDetections = selectedBase
+    ? visibleDetections.filter((d) => getBaseLabel(d.label) === selectedBase)
+    : [];
+  const previewMaskUrls = selectedBaseDetections
+    .map((d) => d.maskUrl)
+    .filter(Boolean) as string[];
   const appliedMaterial = selectedRegionId
     ? appliedMaterials[selectedRegionId] ?? null
     : null;
@@ -61,9 +69,63 @@ export function VisualizerPage() {
     null;
   const previewMaterialTexture =
     selectedMaterial?.assetUrl ?? appliedMaterial?.assetUrl ?? null;
-  const previewDetection = selectedRegionId
-    ? detectionResult?.detections.find((d) => d.label === selectedRegionId) ?? null
+  const previewMaterialRotation = appliedMaterial?.rotation ?? 0;
+  const previewDetection =
+    selectedBaseDetections.length > 0 ? selectedBaseDetections[0] : null;
+
+  const getContainRect = (
+    containerW: number,
+    containerH: number,
+    imageW: number,
+    imageH: number,
+  ) => {
+    if (!containerW || !containerH || !imageW || !imageH) {
+      return { x: 0, y: 0, width: containerW, height: containerH };
+    }
+    const scale = Math.min(containerW / imageW, containerH / imageH);
+    const width = imageW * scale;
+    const height = imageH * scale;
+    const x = (containerW - width) / 2;
+    const y = (containerH - height) / 2;
+    return { x, y, width, height };
+  };
+
+  const previewContain = useMemo(
+    () =>
+      getContainRect(
+        previewSize.width,
+        previewSize.height,
+        previewImageNatural.width,
+        previewImageNatural.height,
+      ),
+    [previewSize, previewImageNatural],
+  );
+
+  const fullscreenContain = useMemo(
+    () =>
+      getContainRect(
+        fullscreenSize.width,
+        fullscreenSize.height,
+        previewImageNatural.width,
+        previewImageNatural.height,
+      ),
+    [fullscreenSize, previewImageNatural],
+  );
+
+  const getPolygonPoints = (polygon?: { x: number; y: number }[]) =>
+    polygon?.map((point) => `${point.x},${point.y}`).join(" ") ?? "";
+
+  const hoveredDetection = hoveredModalLabel
+    ? selectedBaseDetections.find((d) => d.label === hoveredModalLabel) ?? null
     : null;
+
+  useEffect(() => {
+    if (!hoveredModalLabel) return;
+    const stillVisible = selectedBaseDetections.some(
+      (d) => d.label === hoveredModalLabel,
+    );
+    if (!stillVisible) setHoveredModalLabel(null);
+  }, [hoveredModalLabel, selectedBaseDetections]);
 
   const getTextureTileSize = (
     width: number,
@@ -163,7 +225,8 @@ export function VisualizerPage() {
           b &&
           a.materialId === b.materialId &&
           a.assetUrl === b.assetUrl &&
-          a.color === b.color
+          a.color === b.color &&
+          a.rotation === b.rotation
         );
       });
     setRoomImage(scene.roomImageUrl);
@@ -452,6 +515,9 @@ export function VisualizerPage() {
                       const isActive =
                         selectedRegionId &&
                         getBaseLabel(selectedRegionId) === base
+                      const segmentLabels = visibleDetections
+                        .filter((item) => getBaseLabel(item.label) === base)
+                        .map((item) => item.label)
                       return (
                         <button
                           key={base}
@@ -464,6 +530,7 @@ export function VisualizerPage() {
                               ? "bg-emerald-600 text-white"
                               : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                           }`}
+                          aria-label={`${base} (${segmentLabels.join(", ")})`}
                         >
                           {base}
                         </button>
@@ -471,6 +538,25 @@ export function VisualizerPage() {
                     })
                   )}
                 </div>
+                {selectedRegionId && (
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {(() => {
+                      const base = getBaseLabel(selectedRegionId)
+                      const segments = visibleDetections
+                        .filter((d) => getBaseLabel(d.label) === base)
+                        .map((d) => d.label)
+                      if (segments.length === 0) return null
+                      return (
+                        <span>
+                          Segments:{" "}
+                          <span className="font-medium text-slate-700 dark:text-slate-200">
+                            {segments.join(", ")}
+                          </span>
+                        </span>
+                      )
+                    })()}
+                  </div>
+                )}
                 <div className="flex min-h-0 flex-1 gap-3">
                   <div
                     ref={previewContainerRef}
@@ -482,16 +568,22 @@ export function VisualizerPage() {
                           src={previewImageUrl}
                           alt="Room preview"
                           className="h-full w-full rounded-xl object-contain"
+                          onLoad={(event) => {
+                            const img = event.currentTarget;
+                            setPreviewImageNatural({
+                              width: img.naturalWidth,
+                              height: img.naturalHeight,
+                            });
+                          }}
                         />
-                        {previewMaskUrl &&
-                          (previewMaterialColor || previewMaterialTexture) && (
+                        {previewMaskUrls.length > 0 &&
+                          (previewMaterialColor || previewMaterialTexture) &&
+                          previewMaskUrls.map((maskUrl) => (
                             <div
+                              key={maskUrl}
                               className="pointer-events-none absolute inset-0 rounded-xl"
                               style={{
                                 backgroundColor: previewMaterialColor ?? undefined,
-                                backgroundImage: previewMaterialTexture
-                                  ? `url(${previewMaterialTexture})`
-                                  : undefined,
                                 backgroundSize: previewMaterialTexture
                                   ? getTextureTileSize(
                                       previewSize.width,
@@ -499,15 +591,11 @@ export function VisualizerPage() {
                                       previewDetection?.bbox ?? null,
                                     )
                                   : undefined,
-                                backgroundRepeat: previewMaterialTexture
-                                  ? "repeat"
-                                  : undefined,
-                                backgroundPosition: previewMaterialTexture
-                                  ? "top left"
-                                  : undefined,
+                                backgroundRepeat: undefined,
+                                backgroundPosition: undefined,
                                 mixBlendMode: "multiply",
-                                WebkitMaskImage: `url(${previewMaskUrl})`,
-                                maskImage: `url(${previewMaskUrl})`,
+                                WebkitMaskImage: `url(${maskUrl})`,
+                                maskImage: `url(${maskUrl})`,
                                 WebkitMaskSize: "contain",
                                 maskSize: "contain",
                                 WebkitMaskRepeat: "no-repeat",
@@ -515,8 +603,99 @@ export function VisualizerPage() {
                                 WebkitMaskPosition: "center",
                                 maskPosition: "center",
                               }}
-                            />
-                          )}
+                            >
+                              {previewMaterialTexture && (
+                                <div
+                                  className="absolute inset-0"
+                                  style={{
+                                    backgroundImage: `url(${previewMaterialTexture})`,
+                                    backgroundSize: getTextureTileSize(
+                                      fullscreenSize.width,
+                                      fullscreenSize.height,
+                                      previewDetection?.bbox ?? null,
+                                    ),
+                                    backgroundRepeat: "repeat",
+                                    backgroundPosition: "top left",
+                                    transform: `rotate(${previewMaterialRotation}deg)`,
+                                    transformOrigin: "center",
+                                  }}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        {selectedBaseDetections.length > 0 && (
+                          <div className="absolute inset-0">
+                            {hoveredDetection?.maskUrl && (
+                              <div
+                                className="pointer-events-none absolute inset-0 rounded-xl"
+                                style={{
+                                  backgroundColor: "rgba(34, 197, 94, 0.2)",
+                                  WebkitMaskImage: `url(${hoveredDetection.maskUrl})`,
+                                  maskImage: `url(${hoveredDetection.maskUrl})`,
+                                  WebkitMaskSize: "contain",
+                                  maskSize: "contain",
+                                  WebkitMaskRepeat: "no-repeat",
+                                  maskRepeat: "no-repeat",
+                                  WebkitMaskPosition: "center",
+                                  maskPosition: "center",
+                                }}
+                              />
+                            )}
+                            {hoveredDetection?.polygon &&
+                              hoveredDetection.polygon.length >= 3 && (
+                              <svg
+                                className="pointer-events-none absolute"
+                                style={{
+                                  left: previewContain.x,
+                                  top: previewContain.y,
+                                  width: previewContain.width,
+                                  height: previewContain.height,
+                                }}
+                                viewBox="0 0 100 100"
+                                preserveAspectRatio="none"
+                              >
+                                <polygon
+                                  points={getPolygonPoints(hoveredDetection.polygon)}
+                                  fill="rgba(34, 197, 94, 0.12)"
+                                  stroke="rgba(34, 197, 94, 0.9)"
+                                  strokeWidth="2"
+                                  strokeDasharray="6 4"
+                                />
+                              </svg>
+                            )}
+                            {selectedBaseDetections.map((d) => {
+                              const centerX =
+                                previewContain.x +
+                                ((d.bbox.x + d.bbox.width / 2) / 100) *
+                                  previewContain.width;
+                              const centerY =
+                                previewContain.y +
+                                ((d.bbox.y + d.bbox.height / 2) / 100) *
+                                  previewContain.height;
+                              return (
+                                <button
+                                  key={d.label}
+                                  type="button"
+                                  onClick={() => setSelectedRegionId(d.label)}
+                                  onMouseEnter={() => setHoveredModalLabel(d.label)}
+                                  onMouseLeave={() =>
+                                    setHoveredModalLabel((prev) =>
+                                      prev === d.label ? null : prev,
+                                    )
+                                  }
+                                  className="absolute rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm transition-colors hover:bg-slate-900/90"
+                                  style={{
+                                    left: centerX,
+                                    top: centerY,
+                                    transform: "translate(-50%, -50%)",
+                                  }}
+                                >
+                                  {d.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -624,39 +803,133 @@ export function VisualizerPage() {
                     src={previewImageUrl}
                     alt="Room preview"
                     className="h-full w-full rounded-xl object-contain"
+                    onLoad={(event) => {
+                      const img = event.currentTarget;
+                      setPreviewImageNatural({
+                        width: img.naturalWidth,
+                        height: img.naturalHeight,
+                      });
+                    }}
                   />
-                  {previewMaskUrl && (previewMaterialColor || previewMaterialTexture) && (
-                    <div
-                      className="pointer-events-none absolute inset-0 rounded-xl"
-                      style={{
-                        backgroundColor: previewMaterialColor ?? undefined,
-                        backgroundImage: previewMaterialTexture
-                          ? `url(${previewMaterialTexture})`
-                          : undefined,
-                        backgroundSize: previewMaterialTexture
-                          ? getTextureTileSize(
-                              fullscreenSize.width,
-                              fullscreenSize.height,
-                              previewDetection?.bbox ?? null,
-                            )
-                          : undefined,
-                        backgroundRepeat: previewMaterialTexture
-                          ? "repeat"
-                          : undefined,
-                        backgroundPosition: previewMaterialTexture
-                          ? "top left"
-                          : undefined,
-                        mixBlendMode: "multiply",
-                        WebkitMaskImage: `url(${previewMaskUrl})`,
-                        maskImage: `url(${previewMaskUrl})`,
-                        WebkitMaskSize: "contain",
-                        maskSize: "contain",
-                        WebkitMaskRepeat: "no-repeat",
-                        maskRepeat: "no-repeat",
-                        WebkitMaskPosition: "center",
-                        maskPosition: "center",
-                      }}
-                    />
+                  {previewMaskUrls.length > 0 &&
+                    (previewMaterialColor || previewMaterialTexture) &&
+                    previewMaskUrls.map((maskUrl) => (
+                      <div
+                        key={maskUrl}
+                        className="pointer-events-none absolute inset-0 rounded-xl"
+                        style={{
+                          backgroundColor: previewMaterialColor ?? undefined,
+                          backgroundSize: previewMaterialTexture
+                            ? getTextureTileSize(
+                                fullscreenSize.width,
+                                fullscreenSize.height,
+                                previewDetection?.bbox ?? null,
+                              )
+                            : undefined,
+                          backgroundRepeat: undefined,
+                          backgroundPosition: undefined,
+                          mixBlendMode: "multiply",
+                          WebkitMaskImage: `url(${maskUrl})`,
+                          maskImage: `url(${maskUrl})`,
+                          WebkitMaskSize: "contain",
+                          maskSize: "contain",
+                          WebkitMaskRepeat: "no-repeat",
+                          maskRepeat: "no-repeat",
+                          WebkitMaskPosition: "center",
+                          maskPosition: "center",
+                        }}
+                      >
+                        {previewMaterialTexture && (
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              backgroundImage: `url(${previewMaterialTexture})`,
+                              backgroundSize: getTextureTileSize(
+                                previewSize.width,
+                                previewSize.height,
+                                previewDetection?.bbox ?? null,
+                              ),
+                              backgroundRepeat: "repeat",
+                              backgroundPosition: "top left",
+                              transform: `rotate(${previewMaterialRotation}deg)`,
+                              transformOrigin: "center",
+                            }}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  {selectedBaseDetections.length > 0 && (
+                    <div className="absolute inset-0">
+                      {hoveredDetection?.maskUrl && (
+                        <div
+                          className="pointer-events-none absolute inset-0 rounded-xl"
+                          style={{
+                            backgroundColor: "rgba(34, 197, 94, 0.2)",
+                            WebkitMaskImage: `url(${hoveredDetection.maskUrl})`,
+                            maskImage: `url(${hoveredDetection.maskUrl})`,
+                            WebkitMaskSize: "contain",
+                            maskSize: "contain",
+                            WebkitMaskRepeat: "no-repeat",
+                            maskRepeat: "no-repeat",
+                            WebkitMaskPosition: "center",
+                            maskPosition: "center",
+                          }}
+                        />
+                      )}
+                      {hoveredDetection?.polygon &&
+                        hoveredDetection.polygon.length >= 3 && (
+                        <svg
+                          className="pointer-events-none absolute"
+                          style={{
+                            left: fullscreenContain.x,
+                            top: fullscreenContain.y,
+                            width: fullscreenContain.width,
+                            height: fullscreenContain.height,
+                          }}
+                          viewBox="0 0 100 100"
+                          preserveAspectRatio="none"
+                        >
+                          <polygon
+                            points={getPolygonPoints(hoveredDetection.polygon)}
+                            fill="rgba(34, 197, 94, 0.12)"
+                            stroke="rgba(34, 197, 94, 0.9)"
+                            strokeWidth="2"
+                            strokeDasharray="6 4"
+                          />
+                        </svg>
+                      )}
+                      {selectedBaseDetections.map((d) => {
+                        const centerX =
+                          fullscreenContain.x +
+                          ((d.bbox.x + d.bbox.width / 2) / 100) *
+                            fullscreenContain.width;
+                        const centerY =
+                          fullscreenContain.y +
+                          ((d.bbox.y + d.bbox.height / 2) / 100) *
+                            fullscreenContain.height;
+                        return (
+                          <button
+                            key={d.label}
+                            type="button"
+                            onClick={() => setSelectedRegionId(d.label)}
+                            onMouseEnter={() => setHoveredModalLabel(d.label)}
+                            onMouseLeave={() =>
+                              setHoveredModalLabel((prev) =>
+                                prev === d.label ? null : prev,
+                              )
+                            }
+                            className="absolute rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm transition-colors hover:bg-slate-900/90"
+                            style={{
+                              left: centerX,
+                              top: centerY,
+                              transform: "translate(-50%, -50%)",
+                            }}
+                          >
+                            {d.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               ) : (

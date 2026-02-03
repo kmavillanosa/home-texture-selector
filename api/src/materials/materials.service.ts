@@ -17,8 +17,8 @@ const TEXTURE_FOLDERS: { folder: string; category: MaterialDto['category'] }[] =
 const APPLIES_TO_BY_FOLDER: Record<string, string[]> = {
 	floor: ['Floor', 'Rug'],
 	cabinets: ['Cabinet'],
-	countertop: ['Countertop'],
-	backsplash: ['Wall', 'Countertop'],
+	countertop: ['Countertop', 'Counter'],
+	backsplash: ['Wall', 'Countertop', 'Counter'],
 }
 
 const SOLID_COLOR_MATERIALS: MaterialDto[] = [
@@ -198,7 +198,7 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		assetUrl: '',
 		metadata: {
 			color: '#f3f4f6',
-			appliesTo: ['Backsplash', 'Countertop', 'Wall', 'Floor'],
+			appliesTo: ['Backsplash', 'Countertop', 'Counter', 'Wall', 'Floor'],
 		},
 	},
 	{
@@ -209,7 +209,7 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		assetUrl: '',
 		metadata: {
 			color: '#e5e7eb',
-			appliesTo: ['Backsplash', 'Countertop', 'Wall', 'Floor'],
+			appliesTo: ['Backsplash', 'Countertop', 'Counter', 'Wall', 'Floor'],
 		},
 	},
 	{
@@ -220,7 +220,7 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		assetUrl: '',
 		metadata: {
 			color: '#d7d1c4',
-			appliesTo: ['Backsplash', 'Countertop', 'Wall', 'Floor'],
+			appliesTo: ['Backsplash', 'Countertop', 'Counter', 'Wall', 'Floor'],
 		},
 	},
 	{
@@ -231,7 +231,7 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		assetUrl: '',
 		metadata: {
 			color: '#cdbca2',
-			appliesTo: ['Backsplash', 'Countertop', 'Wall', 'Floor'],
+			appliesTo: ['Backsplash', 'Countertop', 'Counter', 'Wall', 'Floor'],
 		},
 	},
 	{
@@ -240,7 +240,7 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		name: 'Graphite',
 		thumbnailUrl: '',
 		assetUrl: '',
-		metadata: { color: '#4b5563', appliesTo: ['Backsplash', 'Countertop'] },
+		metadata: { color: '#4b5563', appliesTo: ['Backsplash', 'Countertop', 'Counter'] },
 	},
 	{
 		id: 'cabinet-greige',
@@ -698,7 +698,7 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		assetUrl: '',
 		metadata: {
 			color: '#ededed',
-			appliesTo: ['Backsplash', 'Countertop', 'Wall', 'Floor'],
+			appliesTo: ['Backsplash', 'Countertop', 'Counter', 'Wall', 'Floor'],
 		},
 	},
 	{
