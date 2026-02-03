@@ -16,10 +16,10 @@ export function Toolbar() {
 					onClick={clearAllMaterials}
 					className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700"
 					title="Remove all applied textures"
-					aria-label="Reset all textures"
+					aria-label="Clear all textures"
 				>
 					<ResetAllIcon />
-					<span>Reset all</span>
+					<span>Clear all</span>
 				</button>
 			)}
 		</div>

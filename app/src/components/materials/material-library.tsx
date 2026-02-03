@@ -73,6 +73,7 @@ export function MaterialLibrary() {
 	const [allMaterials, setAllMaterials] = useState<Material[]>([])
 	const [category, setCategory] = useState('')
 	const [search, setSearch] = useState('')
+	const [browserMode, setBrowserMode] = useState<'textures' | 'colors'>('textures')
 	const detectionResult = useVisualizerStore((s) => s.detectionResult)
 	const selectedRegionId = useVisualizerStore((s) => s.selectedRegionId)
 	const setSelectedRegionId = useVisualizerStore((s) => s.setSelectedRegionId)
@@ -124,12 +125,24 @@ export function MaterialLibrary() {
 			allowedCategories.size > 0
 				? allMaterials.filter((m) => allowedCategories.has(m.category))
 				: allMaterials
-		if (!selectedRegionBase) return filtered
-		return filtered.filter((m) => {
-			const appliesTo = (m.metadata?.appliesTo as string[] | undefined) ?? []
-			return appliesTo.length === 0 || appliesTo.includes(selectedRegionBase)
-		})
-	}, [allMaterials, allowedCategories, selectedRegionBase])
+		const isTexture = (m: Material) => Boolean(m.assetUrl)
+		const isColor = (m: Material) =>
+			Boolean(m.metadata?.color) && !m.assetUrl
+		const scoped = selectedRegionBase
+			? filtered.filter((m) => {
+					const appliesTo =
+						(m.metadata?.appliesTo as string[] | undefined) ?? []
+					return appliesTo.length === 0 || appliesTo.includes(selectedRegionBase)
+				})
+			: filtered
+		if (browserMode === 'textures') {
+			return scoped.filter(isTexture)
+		}
+		if (browserMode === 'colors') {
+			return scoped.filter(isColor)
+		}
+		return scoped
+	}, [allMaterials, allowedCategories, selectedRegionBase, browserMode])
 
 	const handleCategoryClick = (nextCategory: string) => {
 		setCategory(nextCategory)
@@ -176,11 +189,35 @@ export function MaterialLibrary() {
 			<div className="shrink-0 border-b border-slate-200 bg-[#fdfbf7] px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950">
 				<input
 					type="search"
-					placeholder="Search…"
+					placeholder="Search materials…"
 					value={search}
 					onChange={(e) => setSearch(e.target.value)}
 					className="w-full rounded-lg border border-slate-200 bg-white/90 px-2.5 py-1.5 text-xs placeholder:text-slate-400 transition-colors focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
 				/>
+				<div className="mt-2 flex gap-1.5">
+					<button
+						type="button"
+						onClick={() => setBrowserMode('textures')}
+						className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+							browserMode === 'textures'
+								? 'bg-emerald-600 text-white dark:bg-emerald-600'
+								: 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
+						}`}
+					>
+						Textures
+					</button>
+					<button
+						type="button"
+						onClick={() => setBrowserMode('colors')}
+						className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+							browserMode === 'colors'
+								? 'bg-emerald-600 text-white dark:bg-emerald-600'
+								: 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
+						}`}
+					>
+						Colors
+					</button>
+				</div>
 				<div className="mt-2 flex flex-wrap gap-1.5">
 					{visibleCategories.map((c) => (
 						<button
@@ -200,7 +237,7 @@ export function MaterialLibrary() {
 				{selectedRegionId && (
 					<div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-800/80">
 						<span className="truncate text-[11px] text-slate-600 dark:text-slate-400">
-							To <span className="font-semibold text-slate-800 dark:text-slate-200">{getBaseLabel(selectedRegionId)}</span>
+							Apply to <span className="font-semibold text-slate-800 dark:text-slate-200">{getBaseLabel(selectedRegionId)}</span>
 						</span>
 						<button
 							type="button"
@@ -208,13 +245,13 @@ export function MaterialLibrary() {
 							disabled={!appliedMaterials[selectedRegionId]}
 							className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-200"
 						>
-							Reset
+							Clear
 						</button>
 					</div>
 				)}
 				{selectedRegionId && (
 					<label className="mt-2 flex items-center justify-between rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-1.5 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
-						<span>Apply to all segments</span>
+						<span>Apply to all surfaces</span>
 						<button
 							type="button"
 							role="switch"

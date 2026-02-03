@@ -23,14 +23,6 @@ const APPLIES_TO_BY_FOLDER: Record<string, string[]> = {
 
 const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 	{
-		id: 'paint-soft-white',
-		category: 'paint',
-		name: 'Soft White',
-		thumbnailUrl: '',
-		assetUrl: '',
-		metadata: { color: '#f5f5f0', appliesTo: ['Wall', 'Ceiling', 'Door'] },
-	},
-	{
 		id: 'paint-sage-green',
 		category: 'paint',
 		name: 'Sage Green',
@@ -45,22 +37,6 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		thumbnailUrl: '',
 		assetUrl: '',
 		metadata: { color: '#1f2937', appliesTo: ['Wall', 'Ceiling', 'Door'] },
-	},
-	{
-		id: 'paint-warm-white',
-		category: 'paint',
-		name: 'Warm White',
-		thumbnailUrl: '',
-		assetUrl: '',
-		metadata: { color: '#f7f1e8', appliesTo: ['Wall', 'Ceiling', 'Door'] },
-	},
-	{
-		id: 'paint-cool-white',
-		category: 'paint',
-		name: 'Cool White',
-		thumbnailUrl: '',
-		assetUrl: '',
-		metadata: { color: '#eef3f7', appliesTo: ['Wall', 'Ceiling', 'Door'] },
 	},
 	{
 		id: 'paint-pale-sky',
@@ -141,22 +117,6 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		thumbnailUrl: '',
 		assetUrl: '',
 		metadata: { color: '#f9fafb', appliesTo: ['Ceiling'] },
-	},
-	{
-		id: 'paint-ceiling-cream',
-		category: 'paint',
-		name: 'Ceiling Cream',
-		thumbnailUrl: '',
-		assetUrl: '',
-		metadata: { color: '#f4efe7', appliesTo: ['Ceiling'] },
-	},
-	{
-		id: 'paint-ceiling-pearl',
-		category: 'paint',
-		name: 'Ceiling Pearl',
-		thumbnailUrl: '',
-		assetUrl: '',
-		metadata: { color: '#eef1f4', appliesTo: ['Ceiling'] },
 	},
 	{
 		id: 'wallpaper-sand',
@@ -281,14 +241,6 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		thumbnailUrl: '',
 		assetUrl: '',
 		metadata: { color: '#4b5563', appliesTo: ['Backsplash', 'Countertop'] },
-	},
-	{
-		id: 'cabinet-white',
-		category: 'furniture',
-		name: 'Cabinet White',
-		thumbnailUrl: '',
-		assetUrl: '',
-		metadata: { color: '#f8fafc', appliesTo: ['Cabinet', 'Shelf'] },
 	},
 	{
 		id: 'cabinet-greige',
@@ -611,6 +563,70 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		metadata: { color: '#9fae9f', appliesTo: ['Wall'] },
 	},
 	{
+		id: 'paint-terracotta-glow',
+		category: 'paint',
+		name: 'Terracotta Glow',
+		thumbnailUrl: '',
+		assetUrl: '',
+		metadata: { color: '#c65a3a', appliesTo: ['Wall'] },
+	},
+	{
+		id: 'paint-sunflower',
+		category: 'paint',
+		name: 'Sunflower',
+		thumbnailUrl: '',
+		assetUrl: '',
+		metadata: { color: '#f2c94c', appliesTo: ['Wall', 'Door'] },
+	},
+	{
+		id: 'paint-slate-teal',
+		category: 'paint',
+		name: 'Slate Teal',
+		thumbnailUrl: '',
+		assetUrl: '',
+		metadata: { color: '#2f6f73', appliesTo: ['Wall'] },
+	},
+	{
+		id: 'paint-forest-jade',
+		category: 'paint',
+		name: 'Forest Jade',
+		thumbnailUrl: '',
+		assetUrl: '',
+		metadata: { color: '#1f6f4a', appliesTo: ['Wall'] },
+	},
+	{
+		id: 'paint-cobalt-night',
+		category: 'paint',
+		name: 'Cobalt Night',
+		thumbnailUrl: '',
+		assetUrl: '',
+		metadata: { color: '#2f3e66', appliesTo: ['Wall'] },
+	},
+	{
+		id: 'paint-plum-velvet',
+		category: 'paint',
+		name: 'Plum Velvet',
+		thumbnailUrl: '',
+		assetUrl: '',
+		metadata: { color: '#5b2a5b', appliesTo: ['Wall'] },
+	},
+	{
+		id: 'paint-rose-clay',
+		category: 'paint',
+		name: 'Rose Clay',
+		thumbnailUrl: '',
+		assetUrl: '',
+		metadata: { color: '#c98c8c', appliesTo: ['Wall'] },
+	},
+	{
+		id: 'paint-graphite-blue',
+		category: 'paint',
+		name: 'Graphite Blue',
+		thumbnailUrl: '',
+		assetUrl: '',
+		metadata: { color: '#3d4a5c', appliesTo: ['Wall'] },
+	},
+	{
 		id: 'flooring-honey-oak',
 		category: 'flooring',
 		name: 'Honey Oak',
@@ -686,17 +702,6 @@ const SOLID_COLOR_MATERIALS: MaterialDto[] = [
 		},
 	},
 	{
-		id: 'tiles-marble-white',
-		category: 'tiles',
-		name: 'Marble White',
-		thumbnailUrl: '',
-		assetUrl: '',
-		metadata: {
-			color: '#f5f5f5',
-			appliesTo: ['Backsplash', 'Countertop', 'Wall', 'Floor'],
-		},
-	},
-	{
 		id: 'cabinet-slate',
 		category: 'furniture',
 		name: 'Slate Cabinet',
@@ -766,7 +771,7 @@ const getTextureMaterials = (): MaterialDto[] => {
 	return out
 }
 
-const getAllMaterials = () => [...SOLID_COLOR_MATERIALS]
+const getAllMaterials = () => [...getTextureMaterials(), ...SOLID_COLOR_MATERIALS]
 
 @Injectable()
 export class MaterialsService {

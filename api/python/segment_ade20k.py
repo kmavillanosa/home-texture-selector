@@ -16,6 +16,32 @@ except Exception:
 	load_decomnet = None  # type: ignore
 
 
+def _configure_torch() -> None:
+	import torch
+	threads_raw = os.environ.get("TORCH_NUM_THREADS", "")
+	if threads_raw.isdigit():
+		torch.set_num_threads(int(threads_raw))
+	if torch.cuda.is_available():
+		torch.backends.cudnn.benchmark = True
+	if hasattr(torch, "set_float32_matmul_precision"):
+		torch.set_float32_matmul_precision("high")
+
+
+def get_segmentation_device():
+	import torch
+	device_raw = os.environ.get("SEGMENTATION_DEVICE", "auto").lower()
+	if device_raw == "auto":
+		if torch.cuda.is_available():
+			return torch.device("cuda")
+		if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+			return torch.device("mps")
+		return torch.device("cpu")
+	try:
+		return torch.device(device_raw)
+	except Exception:
+		return torch.device("cpu")
+
+
 def load_model():
 	# Best SegFormer for ADE20K: B5 ~51% mIoU. Use B4 (50.3%) for less VRAM:
 	#   ADE_MODEL_ID=nvidia/segformer-b4-finetuned-ade-512-512
@@ -24,11 +50,15 @@ def load_model():
 		"ADE_MODEL_ID", "nvidia/segformer-b5-finetuned-ade-640-640"
 	)
 	from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
+	import torch
 
+	_configure_torch()
+	device = get_segmentation_device()
 	processor = SegformerImageProcessor.from_pretrained(model_id)
 	model = SegformerForSemanticSegmentation.from_pretrained(model_id)
+	model.to(device)
 	model.eval()
-	return processor, model
+	return processor, model, device
 
 
 _RETINEX_DECOM_MODEL = None
@@ -289,12 +319,14 @@ _TARGET = [
 	("Wall", [1]),
 	("Floor", [4]),
 	("Ceiling", [6]),
+	("Rug", [29]),
 	("Cabinet", [11]),
 	("Shelf", [25]),
 	("Countertop", [71]),
 ]
 _TARGET = [(label, [i - 1 for i in ids]) for (label, ids) in _TARGET]
-_SURFACE_LABELS = {"Floor", "Flooring", "Wall", "Ceiling", "Backsplash"}
+_TARGET = [(label, np.array(ids, dtype=np.int32)) for (label, ids) in _TARGET]
+_SURFACE_LABELS = {"Floor", "Flooring", "Wall", "Ceiling", "Backsplash", "Rug"}
 
 # ADE20K "thing" classes to exclude from surface masks (1-indexed ids)
 _OCCLUDER_IDS = {
@@ -310,10 +342,12 @@ _OCCLUDER_IDS = {
 		147, 148, 149, 150,
 	]
 }
+_OCCLUDER_IDS_ARRAY = np.array(sorted(_OCCLUDER_IDS), dtype=np.int32)
 
 
 def _read_config(orig_w: int, orig_h: int):
 	"""Read env-derived config used by run_one (so daemon can re-use per request)."""
+	fast_mode = os.environ.get("FAST_SEGMENTATION", "false").lower() == "true"
 	precise_seg = os.environ.get("PRECISE_SEGMENTATION", "false").lower() == "true"
 	morph_close_radius = 0 if precise_seg else int(os.environ.get("MORPH_CLOSE_RADIUS", "4"))
 	fill_surface_holes = os.environ.get("FILL_SURFACE_HOLES", "true").lower() == "true"
@@ -322,19 +356,45 @@ def _read_config(orig_w: int, orig_h: int):
 	if max_hole_pixels is None and fill_surface_holes:
 		max_hole_pixels = max(500, int(orig_w * orig_h * 0.02))
 	feather = 0.0 if precise_seg else float(os.environ.get("CROP_FEATHER_RADIUS", "4.0"))
+	refine_edges = os.environ.get("REFINE_EDGES_WITH_IMAGE", "true").lower() == "true"
+	use_shadow_norm = os.environ.get("USE_SHADOW_NORMALIZATION", "true").lower() == "true"
+	use_relighting = os.environ.get("USE_RETINEX_RELIGHTING", "false").lower() == "true"
+	use_texture_angle = os.environ.get("USE_TEXTURE_ANGLE", "true").lower() == "true"
+	smooth_masks = os.environ.get("USE_MASK_SMOOTHING", "true").lower() == "true"
+	occluder_dilate_radius = int(os.environ.get("OCCLUDER_DILATE_RADIUS", "3"))
+	shadow_blur_radius = int(os.environ.get("SHADOW_BLUR_RADIUS", "1"))
+	input_size_raw = os.environ.get("SEGMENTATION_INPUT_SIZE", "")
+	input_size = int(input_size_raw) if input_size_raw.isdigit() else None
+	if fast_mode:
+		use_shadow_norm = False
+		use_relighting = False
+		refine_edges = False
+		use_texture_angle = False
+		smooth_masks = False
+		occluder_dilate_radius = 0
+		morph_close_radius = 0
+		fill_surface_holes = False
+		max_hole_pixels = None
+		feather = 0.0
+		shadow_blur_radius = 0
 	return {
-		"use_shadow_norm": os.environ.get("USE_SHADOW_NORMALIZATION", "true").lower() == "true",
+		"fast_mode": fast_mode,
+		"use_shadow_norm": use_shadow_norm,
 		"shadow_clip_limit": float(os.environ.get("SHADOW_CLIP_LIMIT", "2.2")),
 		"shadow_tile_size": int(os.environ.get("SHADOW_TILE_SIZE", "10")),
-		"shadow_blur_radius": int(os.environ.get("SHADOW_BLUR_RADIUS", "1")),
-		"occluder_dilate_radius": int(os.environ.get("OCCLUDER_DILATE_RADIUS", "3")),
+		"shadow_blur_radius": shadow_blur_radius,
+		"occluder_dilate_radius": occluder_dilate_radius,
 		"occluder_block_surfaces": os.environ.get("OCCLUDER_BLOCK_SURFACES", "true").lower() == "true",
 		"generate_cropped": os.environ.get("GENERATE_CROPPED", "false") == "true",
-		"refine_edges": os.environ.get("REFINE_EDGES_WITH_IMAGE", "true").lower() == "true",
+		"refine_edges": refine_edges,
 		"feather": feather,
 		"morph_close_radius": morph_close_radius,
 		"fill_surface_holes": fill_surface_holes,
 		"max_hole_pixels": max_hole_pixels,
+		"use_relighting": use_relighting,
+		"use_texture_angle": use_texture_angle,
+		"smooth_masks": smooth_masks,
+		"input_size": input_size,
 	}
 
 
@@ -345,6 +405,7 @@ def run_one(
 	url_prefix: str,
 	processor,
 	model,
+	device,
 ) -> dict:
 	"""
 	Run segmentation for one image. Used by both CLI and daemon.
@@ -362,25 +423,46 @@ def run_one(
 	url_prefix = url_prefix.rstrip("/")
 	img = Image.open(image_path).convert("RGB")
 	orig_w, orig_h = img.size
-	img_array = np.array(img)
 	cfg = _read_config(orig_w, orig_h)
+	img_array = None
+
+	def get_img_array():
+		nonlocal img_array, img
+		if img_array is None:
+			img_array = np.array(img)
+		return img_array
+
 	if cfg["use_shadow_norm"]:
 		img_array = normalize_shadows(
-			img_array,
+			get_img_array(),
 			clip_limit=cfg["shadow_clip_limit"],
 			tile_size=cfg["shadow_tile_size"],
 			blur_radius=cfg["shadow_blur_radius"],
 		)
 		img = Image.fromarray(img_array)
-	img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR) if cfg["refine_edges"] else None
+	img_bgr = cv2.cvtColor(get_img_array(), cv2.COLOR_RGB2BGR) if cfg["refine_edges"] else None
 
-	inputs = processor(images=img, return_tensors="pt")
-	with torch.no_grad():
-		outputs = model(**inputs)
+	input_size = cfg["input_size"]
+	if input_size is not None:
+		inputs = processor(
+			images=img,
+			return_tensors="pt",
+			size={"height": input_size, "width": input_size},
+		)
+	else:
+		inputs = processor(images=img, return_tensors="pt")
+	inputs = {k: v.to(device) for (k, v) in inputs.items()}
+	use_amp = device.type == "cuda" and os.environ.get("USE_TORCH_AMP", "true").lower() == "true"
+	with torch.inference_mode():
+		if use_amp:
+			with torch.autocast("cuda", dtype=torch.float16):
+				outputs = model(**inputs)
+		else:
+			outputs = model(**inputs)
 	logits = outputs.logits
 	logits = F.interpolate(logits, size=(orig_h, orig_w), mode="bilinear", align_corners=False)
 	seg = logits.argmax(dim=1)[0].cpu().numpy().astype(np.int32)
-	occluder_mask = np.isin(seg, np.array(list(_OCCLUDER_IDS), dtype=np.int32))
+	occluder_mask = np.isin(seg, _OCCLUDER_IDS_ARRAY)
 	occluder_dilate = cfg["occluder_dilate_radius"]
 	if occluder_dilate > 0:
 		kernel = cv2.getStructuringElement(
@@ -389,9 +471,8 @@ def run_one(
 		occluder_mask = cv2.dilate(occluder_mask.astype(np.uint8), kernel).astype(bool)
 
 	illumination_map_url = None
-	use_relighting = os.environ.get("USE_RETINEX_RELIGHTING", "false").lower() == "true"
-	if use_relighting:
-		illum = compute_illumination_map(img_array)
+	if cfg["use_relighting"]:
+		illum = compute_illumination_map(get_img_array())
 		if illum is not None:
 			illum_name = f"{upload_id}-illumination.png"
 			Image.fromarray(illum, mode="L").save(cache_dir / illum_name)
@@ -399,7 +480,7 @@ def run_one(
 
 	items: list[tuple[str, np.ndarray, int, int, int, int]] = []
 	for label, class_ids in _TARGET:
-		mask = np.isin(seg, np.array(class_ids, dtype=np.int32))
+		mask = np.isin(seg, class_ids)
 		if not mask.any():
 			continue
 		base = base_label(label)
@@ -414,23 +495,27 @@ def run_one(
 			if (cfg["fill_surface_holes"] and base in _SURFACE_LABELS)
 			else None,
 		).astype(bool)
-		if base in {"Wall", "Ceiling", "Floor"}:
+		if base in {"Wall", "Ceiling", "Floor", "Rug"}:
 			if cfg["occluder_block_surfaces"]:
 				mask = mask & ~occluder_mask_label
 			mask = remove_small_components(mask, max(800, int(orig_w * orig_h * 0.003)))
-			mask = smooth_mask_edges(mask, radius=3)
+			if cfg["smooth_masks"]:
+				mask = smooth_mask_edges(mask, radius=3)
 		elif base in {"Counter", "Countertop", "Backsplash"}:
 			if cfg["occluder_block_surfaces"]:
 				mask = mask & ~occluder_mask_label
 			mask = remove_small_components(mask, max(700, int(orig_w * orig_h * 0.002)))
-			mask = smooth_mask_edges(mask, radius=2)
+			if cfg["smooth_masks"]:
+				mask = smooth_mask_edges(mask, radius=2)
 		elif base in {"Cabinet", "Shelf"}:
 			mask = remove_small_components(mask, max(700, int(orig_w * orig_h * 0.002)))
-			mask = smooth_mask_edges(mask, radius=2)
+			if cfg["smooth_masks"]:
+				mask = smooth_mask_edges(mask, radius=2)
 		multi_label = base in {
 			"Wall",
 			"Ceiling",
 			"Floor",
+			"Rug",
 			"Cabinet",
 			"Shelf",
 			"Counter",
@@ -438,7 +523,7 @@ def run_one(
 			"Backsplash",
 		}
 		if multi_label:
-			if base in {"Wall", "Ceiling", "Floor"}:
+			if base in {"Wall", "Ceiling", "Floor", "Rug"}:
 				min_comp = max(1200, int(orig_w * orig_h * 0.004))
 			elif base == "Shelf":
 				min_comp = max(1200, int(orig_w * orig_h * 0.004))
@@ -539,10 +624,11 @@ def run_one(
 			apply_mask_crop_tight(img, alpha, min_x, min_y, max_x, max_y, cache_dir / crop_name)
 			cropped_url = f"{url_prefix}/{crop_name}"
 		texture_angle = 0.0
-		try:
-			texture_angle = dominant_texture_angle(img_array, mask)
-		except Exception:
-			pass
+		if cfg["use_texture_angle"]:
+			try:
+				texture_angle = dominant_texture_angle(get_img_array(), mask)
+			except Exception:
+				pass
 		detections.append({
 			"label": label,
 			"score": 1,
@@ -587,7 +673,7 @@ def main():
 
 	if args.daemon:
 		# Persistent worker: load model once, then process jobs from stdin
-		processor, model = load_model()
+		processor, model, device = load_model()
 		sys.stdout.write(json.dumps({"ready": True}) + "\n")
 		sys.stdout.flush()
 		while True:
@@ -619,6 +705,7 @@ def main():
 					url_prefix,
 					processor,
 					model,
+					device,
 				)
 				sys.stdout.write(json.dumps(out) + "\n")
 				sys.stdout.flush()
@@ -633,8 +720,16 @@ def main():
 	image_path = Path(args.image)
 	cache_dir = Path(args.cache_dir)
 	url_prefix = args.url_prefix or "/cache"
-	processor, model = load_model()
-	out = run_one(image_path, args.upload_id, cache_dir, url_prefix, processor, model)
+	processor, model, device = load_model()
+	out = run_one(
+		image_path,
+		args.upload_id,
+		cache_dir,
+		url_prefix,
+		processor,
+		model,
+		device,
+	)
 	sys.stdout.write(json.dumps(out))
 	sys.stdout.flush()
 

@@ -90,9 +90,9 @@ export function FloatingMaterialMenu() {
 								type="button"
 								onClick={clearAllMaterials}
 								className="rounded-md px-1.5 py-1 text-[10px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-								aria-label="Reset all textures"
+								aria-label="Clear all textures"
 							>
-								Reset all
+								Clear all
 							</button>
 						)}
 						<button
