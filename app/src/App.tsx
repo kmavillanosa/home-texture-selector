@@ -4,6 +4,7 @@ import { HomePage } from './pages/home-page'
 import { SamplesPage } from './pages/samples-page'
 import { UploadPage } from './pages/upload-page'
 import { VisualizerPage } from './pages/visualizer-page'
+import { MobileUploadPage } from './pages/mobile-upload-page'
 import './App.css'
 
 function App() {
@@ -11,6 +12,7 @@ function App() {
 	return (
 		<BrowserRouter basename={baseUrl}>
 			<Routes>
+				<Route path="/mobile-upload" element={<MobileUploadPage />} />
 				<Route element={<MainLayout />}>
 					<Route path="/" element={<HomePage />} />
 					<Route path="/samples" element={<SamplesPage />} />

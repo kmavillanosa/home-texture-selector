@@ -51,13 +51,21 @@ export interface Material {
 	metadata?: Record<string, unknown>
 }
 
+export interface AppliedMaterialSnapshot {
+	materialId: string
+	color: string
+	assetUrl: string
+	rotation: number
+}
+
 export interface Scene {
 	id: string
 	name: string
 	roomImageUrl: string
 	segmentationResult?: SegmentationResult
 	detectionResult?: DetectionResult
-	appliedMaterials?: Record<string, string>
+	appliedMaterials?: Record<string, string | AppliedMaterialSnapshot>
+	notes?: string
 }
 
 export interface Project {
@@ -67,7 +75,7 @@ export interface Project {
 	roomImageUrl: string
 	segmentationResult?: SegmentationResult
 	detectionResult?: DetectionResult
-	appliedMaterials?: Record<string, string>
+	appliedMaterials?: Record<string, string | AppliedMaterialSnapshot>
 	scenes?: Scene[]
 	createdAt: string
 	updatedAt: string

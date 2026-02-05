@@ -1,0 +1,59 @@
+// Anyo Haus Studio – Prisma schema
+// PostgreSQL with JSONB for flexible project data
+
+generator client {
+	provider = "prisma-client-js"
+}
+
+datasource db {
+	provider = "postgresql"
+	url      = env("DATABASE_URL")
+}
+
+model User {
+	id        String    @id @default(uuid())
+	email     String?   @unique
+	name      String?
+	createdAt DateTime  @default(now())
+	projects  Project[]
+}
+
+model Project {
+	id                 String   @id @default(uuid())
+	userId             String?
+	user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+	name               String
+	thumbnailUrl       String?
+	roomImageUrl       String
+	segmentationResult Json?
+	detectionResult    Json?
+	appliedMaterials   Json?    // Record<regionId, materialId>
+	scenes             Json?    // SceneDto[]
+	createdAt          DateTime @default(now())
+	updatedAt          DateTime @updatedAt
+	materials          ProjectMaterial[]
+
+	@@index([userId])
+	@@index([updatedAt])
+}
+
+model ProjectMaterial {
+	id        String   @id @default(uuid())
+	projectId String
+	project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+	regionId  String
+	materialId String
+	appliedAt DateTime @default(now())
+
+	@@unique([projectId, regionId])
+	@@index([projectId])
+}
+
+model Material {
+	id          String   @id
+	category    String   // flooring | paint | tiles | wallpapers | furniture
+	name        String
+	thumbnailUrl String  @default("")
+	assetUrl    String  @default("")
+	metadata    Json?
+}

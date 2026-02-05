@@ -17,9 +17,10 @@ const HOVER_DASH = [8, 5]
 const SELECTED_GROUP_FILL = 'rgba(14, 116, 144, 0.25)'
 const SELECTED_GROUP_STROKE = 'rgba(14, 116, 144, 0.85)'
 const SELECTED_GROUP_DASH = [6, 4]
-const COLOR_APPLY_ALPHA = 0.9
-const TEXTURE_SILHOUETTE_ALPHA = 1.0
+const COLOR_APPLY_ALPHA = 0.82
+const TEXTURE_SILHOUETTE_ALPHA = 0.82
 const ILLUM_SILHOUETTE_ALPHA = 0.5
+const TEXTURE_UNDERCOAT_ALPHA = 0.35
 const VISIBLE_LABELS = new Set([
 	'Wall',
 	'Floor',
@@ -256,7 +257,11 @@ const hexToRgba = (hex: string, alpha: number) => {
 	return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-export function RoomCanvas() {
+export function RoomCanvas({
+	onDoubleClick,
+}: {
+	onDoubleClick?: () => void
+}) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const canvasRef = useRef<HTMLCanvasElement>(null)
 	const renderMetricsRef = useRef(defaultMetrics)
@@ -280,6 +285,7 @@ export function RoomCanvas() {
 
 	const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null)
 	const loadedImageRef = useRef<HTMLImageElement | null>(null)
+	const [renderedReadyUrl, setRenderedReadyUrl] = useState<string | null>(null)
 	const hasAutoFittedRef = useRef(false)
 	const [croppedImages, setCroppedImages] = useState<
 		Record<string, HTMLImageElement>
@@ -307,7 +313,28 @@ export function RoomCanvas() {
 		loadedImageRef.current = loadedImage
 	}, [loadedImage])
 
-	const displayImageUrl = renderedImageUrl ?? roomImageUrl
+	const displayImageUrl = renderedReadyUrl ?? roomImageUrl
+	const shouldRenderApplied = !renderedReadyUrl
+
+	useEffect(() => {
+		if (!renderedImageUrl) {
+			setRenderedReadyUrl(null)
+			return
+		}
+		let isActive = true
+		const img = new Image()
+		img.crossOrigin = 'anonymous'
+		img.onload = () => {
+			if (isActive) setRenderedReadyUrl(renderedImageUrl)
+		}
+		img.onerror = () => {
+			if (isActive) setRenderedReadyUrl(null)
+		}
+		img.src = renderedImageUrl
+		return () => {
+			isActive = false
+		}
+	}, [renderedImageUrl])
 
 	useEffect(() => {
 		if (!displayImageUrl) {
@@ -322,16 +349,18 @@ export function RoomCanvas() {
 			? displayImageUrl
 			: displayImageUrl
 		img.onload = () => setLoadedImage(img)
-		img.onerror = () => setLoadedImage(null)
-		return () => setLoadedImage(null)
+		img.onerror = () => {
+			// Keep the last good image if the new one fails
+		}
+		return () => {
+			// keep last loaded image to avoid blank flashes
+		}
 	}, [displayImageUrl])
 
 	useEffect(() => {
 		if (croppedUrls.length === 0) {
-			setCroppedImages({})
 			return
 		}
-		setCroppedImages({})
 		const urls = [...new Set(croppedUrls)]
 		urls.forEach((url) => {
 			const img = new Image()
@@ -344,10 +373,8 @@ export function RoomCanvas() {
 
 	useEffect(() => {
 		if (maskUrls.length === 0) {
-			setMaskImages({})
 			return
 		}
-		setMaskImages({})
 		const urls = [...new Set(maskUrls)]
 		urls.forEach((url) => {
 			const img = new Image()
@@ -381,7 +408,6 @@ export function RoomCanvas() {
 
 	useEffect(() => {
 		if (textureUrls.length === 0) {
-			setTextureImages({})
 			return
 		}
 		const urls = [...new Set(textureUrls)]
@@ -447,6 +473,26 @@ export function RoomCanvas() {
 			const ctx = canvas.getContext('2d')
 			if (!ctx) return canvas
 			ctx.fillStyle = hexToRgba(color, COLOR_APPLY_ALPHA)
+			ctx.fillRect(0, 0, canvas.width, canvas.height)
+			ctx.globalCompositeOperation = 'destination-in'
+			ctx.drawImage(maskImg, 0, 0)
+			maskOverlayRef.current[key] = canvas
+			return canvas
+		},
+		[],
+	)
+
+	const getWhiteMaskOverlay = useCallback(
+		(maskUrl: string, maskImg: HTMLImageElement) => {
+			const key = `${maskUrl}::white::${TEXTURE_UNDERCOAT_ALPHA}`
+			const existing = maskOverlayRef.current[key]
+			if (existing) return existing
+			const canvas = document.createElement('canvas')
+			canvas.width = maskImg.naturalWidth
+			canvas.height = maskImg.naturalHeight
+			const ctx = canvas.getContext('2d')
+			if (!ctx) return canvas
+			ctx.fillStyle = `rgba(255, 255, 255, ${TEXTURE_UNDERCOAT_ALPHA})`
 			ctx.fillRect(0, 0, canvas.width, canvas.height)
 			ctx.globalCompositeOperation = 'destination-in'
 			ctx.drawImage(maskImg, 0, 0)
@@ -542,13 +588,15 @@ export function RoomCanvas() {
 				detectionResult?.detections
 					.map((d) => `${d.label}:${d.maskUrl ?? ''}:${d.croppedUrl ?? ''}`)
 					.join('|') ?? ''
-			const materialsKey = Object.keys(appliedMaterials)
-				.sort()
-				.map((key) => {
-					const m = appliedMaterials[key]
-					return `${key}:${m.materialId}:${m.assetUrl}:${m.color}:${m.rotation ?? 0}`
-				})
-				.join('|')
+			const materialsKey = shouldRenderApplied
+				? Object.keys(appliedMaterials)
+						.sort()
+						.map((key) => {
+							const m = appliedMaterials[key]
+							return `${key}:${m.materialId}:${m.assetUrl}:${m.color}:${m.rotation ?? 0}`
+						})
+						.join('|')
+				: ''
 			const illumKey = illuminationImage?.src ?? ''
 			const scaleKey = `${useVisualizerStore.getState().scale}:${useVisualizerStore.getState().pan.x}:${useVisualizerStore.getState().pan.y}`
 			return [
@@ -563,7 +611,13 @@ export function RoomCanvas() {
 				scaleKey,
 			].join('::')
 		},
-		[appliedMaterials, detectionResult, illuminationImage, loadedImage],
+		[
+			appliedMaterials,
+			detectionResult,
+			illuminationImage,
+			loadedImage,
+			shouldRenderApplied,
+		],
 	)
 
 	const draw = useCallback(
@@ -641,27 +695,84 @@ export function RoomCanvas() {
 					bctx.restore()
 
 					// 2.5 Applied materials (persistent)
-					bctx.save()
-					bctx.translate(p.x + baseX, p.y + baseY)
-					bctx.translate(dw / 2, dh / 2)
-					bctx.scale(s, s)
-					bctx.translate(-dw / 2, -dh / 2)
-					sortedForLayers.forEach((d) => {
-						const applied = appliedMaterials[d.label]
-						if (!applied) return
-						if (d.maskUrl && maskImages[d.maskUrl]) {
-							if (applied.assetUrl && textureImages[applied.assetUrl]) {
-								const overlay = getTexturedMaskOverlay(
+					if (shouldRenderApplied) {
+						bctx.save()
+						bctx.translate(p.x + baseX, p.y + baseY)
+						bctx.translate(dw / 2, dh / 2)
+						bctx.scale(s, s)
+						bctx.translate(-dw / 2, -dh / 2)
+						sortedForLayers.forEach((d) => {
+							const applied = appliedMaterials[d.label]
+							if (!applied) return
+							if (d.maskUrl && maskImages[d.maskUrl]) {
+								if (applied.assetUrl && textureImages[applied.assetUrl]) {
+									const whiteBase = getWhiteMaskOverlay(
+										d.maskUrl,
+										maskImages[d.maskUrl],
+									)
+									bctx.globalCompositeOperation = 'source-over'
+									bctx.globalAlpha = 1
+									bctx.drawImage(
+										whiteBase,
+										0,
+										0,
+										whiteBase.width,
+										whiteBase.height,
+										0,
+										0,
+										dw,
+										dh,
+									)
+									const overlay = getTexturedMaskOverlay(
+										d.maskUrl,
+										applied.assetUrl,
+										maskImages[d.maskUrl],
+										textureImages[applied.assetUrl],
+										loadedImage,
+										d,
+										applied.rotation ?? 0,
+									)
+								bctx.globalCompositeOperation = 'multiply'
+								bctx.globalAlpha = TEXTURE_SILHOUETTE_ALPHA
+									bctx.drawImage(
+										overlay,
+										0,
+										0,
+										overlay.width,
+										overlay.height,
+										0,
+										0,
+										dw,
+										dh,
+									)
+								bctx.globalAlpha = 1
+								bctx.globalCompositeOperation = 'source-over'
+									return
+								}
+								const whiteBase = getWhiteMaskOverlay(
 									d.maskUrl,
-									applied.assetUrl,
 									maskImages[d.maskUrl],
-									textureImages[applied.assetUrl],
-									loadedImage,
-									d,
-									applied.rotation ?? 0,
 								)
 								bctx.globalCompositeOperation = 'source-over'
 								bctx.globalAlpha = 1
+								bctx.drawImage(
+									whiteBase,
+									0,
+									0,
+									whiteBase.width,
+									whiteBase.height,
+									0,
+									0,
+									dw,
+									dh,
+								)
+								const overlay = getTintedMaskOverlay(
+									d.maskUrl,
+									applied.color,
+									maskImages[d.maskUrl],
+								)
+							bctx.globalCompositeOperation = 'multiply'
+							bctx.globalAlpha = COLOR_APPLY_ALPHA
 								bctx.drawImage(
 									overlay,
 									0,
@@ -673,33 +784,19 @@ export function RoomCanvas() {
 									dw,
 									dh,
 								)
-								bctx.globalAlpha = 1
-								return
-							}
-							const overlay = getTintedMaskOverlay(
-								d.maskUrl,
-								applied.color,
-								maskImages[d.maskUrl],
-							)
-							bctx.drawImage(
-								overlay,
-								0,
-								0,
-								overlay.width,
-								overlay.height,
-								0,
-								0,
-								dw,
-								dh,
-							)
+							bctx.globalAlpha = 1
+							bctx.globalCompositeOperation = 'source-over'
 							return
-						}
+							}
+						bctx.globalCompositeOperation = 'multiply'
 						bctx.fillStyle = hexToRgba(applied.color, COLOR_APPLY_ALPHA)
 						bctx.strokeStyle = hexToRgba(applied.color, 0.9)
-						bctx.lineWidth = 2
-						drawFallbackOverlay(bctx, d, dw, dh)
-					})
-					bctx.restore()
+							bctx.lineWidth = 2
+							drawFallbackOverlay(bctx, d, dw, dh)
+						bctx.globalCompositeOperation = 'source-over'
+						})
+						bctx.restore()
+					}
 				}
 			}
 
@@ -983,6 +1080,7 @@ export function RoomCanvas() {
 			onMouseUp={handleMouseUp}
 			onMouseLeave={handleMouseLeave}
 			onClick={handleClick}
+			onDoubleClick={onDoubleClick}
 			style={{
 				cursor:
 					hoveredIndex !== null &&

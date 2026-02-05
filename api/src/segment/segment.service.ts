@@ -4,6 +4,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { spawn, type ChildProcess } from 'child_process'
 import type { DetectionResult } from '../common/types'
+import { StorageService } from '../storage/storage.service'
 
 const CACHE_DIR = path.join(process.cwd(), 'cache')
 const CACHE_URL_PREFIX = '/cache'
@@ -15,12 +16,22 @@ const CLEANUP_INTERVAL_MINUTES = Number(
 )
 const CACHE_TTL_HOURS = Number(process.env.CACHE_TTL_HOURS ?? 24)
 
-const USE_PYTHON_SEGMENTATION = true
+const USE_PYTHON_SEGMENTATION =
+	process.env.USE_PYTHON_SEGMENTATION?.toLowerCase()
+
+const shouldUsePythonSegmentation = () => {
+	if (USE_PYTHON_SEGMENTATION === 'true') return true
+	if (USE_PYTHON_SEGMENTATION === 'false') return false
+	return fs.existsSync(PYTHON_SCRIPT)
+}
 const USE_SEGMENTATION_DAEMON =
 	process.env.USE_SEGMENTATION_DAEMON?.toLowerCase() === 'true'
 const PYTHON_BIN = process.env.PYTHON_BIN ?? 'python'
 const PYTHON_SCRIPT = path.join(process.cwd(), 'python', 'segment_ade20k.py')
 const PYTHON_TIMEOUT_MS = Number(process.env.PYTHON_TIMEOUT_MS ?? 120000)
+const PYTHON_ONESHOT_TIMEOUT_MS = Number(
+	process.env.PYTHON_ONESHOT_TIMEOUT_MS ?? 300000,
+)
 
 type PythonResult = Pick<
 	DetectionResult,
@@ -47,8 +58,9 @@ export class SegmentService {
 	private stdoutBuffer = ''
 	private pendingQueue: DaemonJob[] = []
 	private currentJob: CurrentJob | null = null
+	private daemonDisabled = false
 
-	constructor() {
+	constructor(private readonly storage: StorageService) {
 		if (!fs.existsSync(CACHE_DIR)) {
 			fs.mkdirSync(CACHE_DIR, { recursive: true })
 		}
@@ -61,28 +73,55 @@ export class SegmentService {
 	async segment(
 		uploadId?: string,
 		imageUrl?: string,
+		useDaemon?: boolean,
 	): Promise<DetectionResult> {
 		const id = uploadId ?? randomUUID()
-		const imagePath = imageUrl
-			? path.join(process.cwd(), imageUrl.replace(/^\//, ''))
-			: null
-
-		if (!imagePath || !fs.existsSync(imagePath)) {
-			return { uploadId: id, detections: [] }
+		let imagePath: string | null = null
+		let tempPath: string | null = null
+		if (imageUrl) {
+			if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+				const key = this.storage.getKeyFromUrl(imageUrl)
+				const buf = await this.storage.get(key)
+				if (!buf) {
+					return { uploadId: id, detections: [] }
+				}
+				const ext = path.extname(key) || '.jpg'
+				tempPath = path.join(
+					path.dirname(CACHE_DIR),
+					'temp',
+					`${id}${ext}`,
+				)
+				const tempDir = path.dirname(tempPath)
+				if (!fs.existsSync(tempDir)) {
+					fs.mkdirSync(tempDir, { recursive: true })
+				}
+				fs.writeFileSync(tempPath, buf)
+				imagePath = tempPath
+			} else {
+				imagePath = path.join(process.cwd(), imageUrl.replace(/^\//, ''))
+			}
 		}
-
-		const cacheConfig = this.getCacheConfig(id)
-		const shouldBypassCache =
-			cacheConfig.dir === SAMPLE_CACHE_DIR &&
-			this.isSampleCacheStale(id, imagePath)
-		if (!shouldBypassCache) {
-			const cached = this.readCachedResult(id, cacheConfig.dir)
-			if (cached) return cached
-		}
-
 		try {
-			const pythonResult = USE_PYTHON_SEGMENTATION
-				? await this.runPythonSegmentation(imagePath, id, cacheConfig)
+			if (!imagePath || !fs.existsSync(imagePath)) {
+				return { uploadId: id, detections: [] }
+			}
+
+			const cacheConfig = this.getCacheConfig(id)
+			const shouldBypassCache =
+				cacheConfig.dir === SAMPLE_CACHE_DIR &&
+				this.isSampleCacheStale(id, imagePath)
+			if (!shouldBypassCache) {
+				const cached = this.readCachedResult(id, cacheConfig.dir)
+				if (cached) return cached
+			}
+
+			const pythonResult = shouldUsePythonSegmentation()
+				? await this.runPythonSegmentation(
+						imagePath,
+						id,
+						cacheConfig,
+						useDaemon !== false,
+					)
 				: { detections: [] }
 			const result: DetectionResult = {
 				uploadId: id,
@@ -95,10 +134,21 @@ export class SegmentService {
 			return result
 		} catch (err) {
 			console.error('SegmentService.segment error', err)
+			if (USE_PYTHON_SEGMENTATION !== 'true') {
+				return { uploadId: id, detections: [] }
+			}
 			return {
 				uploadId: id,
 				detections: [],
 				detectionFailed: true,
+			}
+		} finally {
+			if (tempPath && fs.existsSync(tempPath)) {
+				try {
+					fs.unlinkSync(tempPath)
+				} catch {
+					// ignore
+				}
 			}
 		}
 	}
@@ -107,12 +157,21 @@ export class SegmentService {
 		imagePath: string,
 		uploadId: string,
 		cacheConfig: { dir: string; urlPrefix: string },
+		useDaemon: boolean,
 	): Promise<PythonResult> {
 		if (!fs.existsSync(PYTHON_SCRIPT)) {
 			throw new Error(`Python segmentation script missing: ${PYTHON_SCRIPT}`)
 		}
-		if (USE_SEGMENTATION_DAEMON) {
-			return this.runViaDaemon(imagePath, uploadId, cacheConfig)
+		if (useDaemon && USE_SEGMENTATION_DAEMON && !this.daemonDisabled) {
+			try {
+				return await this.runViaDaemon(imagePath, uploadId, cacheConfig)
+			} catch (err) {
+				this.daemonDisabled = true
+				console.warn(
+					'Segmentation daemon failed, falling back to one-shot.',
+					err,
+				)
+			}
 		}
 		return this.runPythonOneShot(imagePath, uploadId, cacheConfig)
 	}
@@ -147,8 +206,12 @@ export class SegmentService {
 				} catch {
 					// ignore
 				}
-				reject(new Error(`Python segmentation timed out after ${PYTHON_TIMEOUT_MS}ms`))
-			}, PYTHON_TIMEOUT_MS)
+				reject(
+					new Error(
+						`Python segmentation timed out after ${PYTHON_ONESHOT_TIMEOUT_MS}ms`,
+					),
+				)
+			}, PYTHON_ONESHOT_TIMEOUT_MS)
 			proc.stdout.on('data', (buf) => {
 				stdout += String(buf)
 			})
@@ -276,6 +339,7 @@ export class SegmentService {
 		this.worker = null
 		this.workerReady = false
 		this.stdoutBuffer = ''
+		this.daemonDisabled = true
 		if (this.currentJob) {
 			clearTimeout(this.currentJob.timeout)
 			this.currentJob.reject(

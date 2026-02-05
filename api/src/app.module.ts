@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
+import { PrismaModule } from './prisma/prisma.module'
+import { StorageModule } from './storage/storage.module'
 import { UploadModule } from './upload/upload.module'
 import { SegmentModule } from './segment/segment.module'
 import { MaterialsModule } from './materials/materials.module'
@@ -14,6 +16,8 @@ import { RenderModule } from './render/render.module'
 			isGlobal: true,
 			envFilePath: ['.env', 'api/.env'],
 		}),
+		PrismaModule,
+		StorageModule,
 		UploadModule,
 		SegmentModule,
 		MaterialsModule,

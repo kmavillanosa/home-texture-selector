@@ -1,16 +1,104 @@
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: anyohaus
+      POSTGRES_PASSWORD: anyohaus
+      POSTGRES_DB: anyohaus
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anyohaus"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: ./api
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
-      - "3001:3000"
+      - "3000:3000"
     volumes:
+      # Mount entire api directory (except node_modules via .dockerignore)
+      - ./api:/app:delegated
+      # Override with named volumes for node_modules and generated files (faster, avoids conflicts)
+      - api-node-modules:/app/node_modules
+      - api-prisma-client:/app/node_modules/.prisma
+      # Persist Hugging Face model cache across container rebuilds
+      - api-hf-cache:/app/.cache/huggingface
+      # Persistent storage (preserved across restarts)
       - api-uploads:/app/uploads
       - api-cache:/app/cache
+    env_file:
+      - ./api/.env  # Load environment variables from .env (optional, won't fail if missing)
     environment:
+      - NODE_ENV=development
       - PORT=3000
+      - DATABASE_URL=postgresql://anyohaus:anyohaus@postgres:5432/anyohaus
+      - NODE_OPTIONS=--max-old-space-size=4096
+      - REDIS_URL=redis://redis:6379
+      # Override .env: use container's Python (not Windows path from local .env)
+      - PYTHON_BIN=python3
+      - HF_HOME=/app/.cache/huggingface
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    # Restart on code changes
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      # Mount entire app directory (except node_modules via .dockerignore)
+      - ./app:/app:delegated
+      # Override with named volume for node_modules (faster, avoids conflicts)
+      - app-node-modules:/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - API_PORT=3000
+      - API_HOST=api  # Docker service name
+      - BASE_URL=/
+    depends_on:
+      - api
+    # Restart on code changes
+    restart: unless-stopped
+    develop:
+      watch:
+        # Restart app container when source or HTML changes
+        - action: restart
+          path: ./app/src
+        - action: restart
+          path: ./app/index.html
+        # Rebuild container when dependencies change
+        - action: rebuild
+          path: ./app/package.json
+        - action: rebuild
+          path: ./app/package-lock.json
 
 volumes:
+  redis_data:
+  postgres_data:
+  api-node-modules:
+  api-prisma-client:
+  api-hf-cache:
   api-uploads:
   api-cache:
+  app-node-modules:

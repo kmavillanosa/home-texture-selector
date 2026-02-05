@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { listMaterials, renderTexture } from '../../api/client'
 import type { Material } from '../../types'
 import { MaterialCard } from './material-card'
@@ -75,6 +75,8 @@ export function MaterialLibrary() {
 	const [category, setCategory] = useState('')
 	const [search, setSearch] = useState('')
 	const [browserMode, setBrowserMode] = useState<'textures' | 'colors'>('textures')
+	const [applyScope, setApplyScope] = useState<'segment' | 'all'>('all')
+	const renderTokenRef = useRef(0)
 	const detectionResult = useVisualizerStore((s) => s.detectionResult)
 	const selectedRegionId = useVisualizerStore((s) => s.selectedRegionId)
 	const setSelectedRegionId = useVisualizerStore((s) => s.setSelectedRegionId)
@@ -83,6 +85,7 @@ export function MaterialLibrary() {
 	const roomImageUrl = useVisualizerStore((s) => s.roomImageUrl)
 	const renderedImageUrl = useVisualizerStore((s) => s.renderedImageUrl)
 	const setRenderedImageUrl = useVisualizerStore((s) => s.setRenderedImageUrl)
+	const setIsRendering = useVisualizerStore((s) => s.setIsRendering)
 	const applyMaterial = useVisualizerStore((s) => s.applyMaterial)
 	const setMaterialRotation = useVisualizerStore((s) => s.setMaterialRotation)
 	const clearMaterial = useVisualizerStore((s) => s.clearMaterial)
@@ -112,6 +115,9 @@ export function MaterialLibrary() {
 		allowedCategories.size > 0
 			? CATEGORIES.filter((c) => c.value === '' || allowedCategories.has(c.value))
 			: CATEGORIES
+	const selectedBaseLabel = selectedRegionId ? getBaseLabel(selectedRegionId) : null
+	const segmentScopeLabel = selectedRegionId ?? 'Select a segment'
+	const allScopeLabel = selectedBaseLabel ? `All ${selectedBaseLabel}` : 'Apply to all'
 
 	useEffect(() => {
 		listMaterials(category || undefined, search || undefined).then((list) => {
@@ -140,6 +146,26 @@ export function MaterialLibrary() {
 		selectedApplied?.assetUrl,
 		selectedApplied?.rotation,
 		selectedMaterial?.id,
+	])
+
+	useEffect(() => {
+		if (!selectedRegionId || allMaterials.length === 0) return
+		if (selectedApplied?.materialId) {
+			const match = allMaterials.find((m) => m.id === selectedApplied.materialId)
+			if (match && selectedMaterial?.id !== match.id) {
+				setSelectedMaterial(match)
+			}
+			return
+		}
+		if (selectedMaterial) {
+			setSelectedMaterial(null)
+		}
+	}, [
+		allMaterials,
+		selectedApplied?.materialId,
+		selectedMaterial?.id,
+		selectedRegionId,
+		setSelectedMaterial,
 	])
 
 	const materials = useMemo(() => {
@@ -173,33 +199,64 @@ export function MaterialLibrary() {
 		if (regionId) setSelectedRegionId(regionId)
 	}
 
-	const handleMaterialSelect = (material: Material) => {
+	const handleMaterialSelect = async (material: Material) => {
 		if (selectedRegionId && !canApply) return
 		setSelectedMaterial(material)
 		const regionId =
 			selectedRegionId ?? pickRegionIdForCategory(category, detectionMeta)
 		if (!regionId) return
-		// Always apply to all segments of the same category
-		const base = getBaseLabel(regionId)
-		detectionResult?.detections
-			.filter((d) => getBaseLabel(d.label) === base)
-			.forEach((d) => applyMaterial(d.label, material, textureRotation))
+		if (applyScope === 'all') {
+			const base = getBaseLabel(regionId)
+			detectionResult?.detections
+				.filter((d) => getBaseLabel(d.label) === base)
+				.forEach((d) => applyMaterial(d.label, material, textureRotation))
+		} else {
+			applyMaterial(regionId, material, textureRotation)
+		}
 		setSelectedRegionId(regionId)
 		// Photorealistic render (local GPU diffusion)
-		const detection = detectionResult?.detections.find((d) => d.label === regionId)
-		if (material.assetUrl && detection?.maskUrl && roomImageUrl) {
-			const prompt = `${material.name} ${regionId} texture, realistic, photo`
-			renderTexture({
-				imageUrl: renderedImageUrl ?? roomImageUrl,
-				maskUrl: detection.maskUrl,
-				prompt,
-				uploadId: detectionResult?.uploadId ?? 'render',
-				label: regionId,
-			})
-				.then((res) => {
+		const color = material.metadata?.color as string | undefined
+		if (!roomImageUrl || (!material.assetUrl && !color)) return
+		const base = getBaseLabel(regionId)
+		const targets =
+			applyScope === 'all'
+				? (detectionResult?.detections ?? []).filter(
+						(d) => getBaseLabel(d.label) === base,
+					)
+				: detectionResult?.detections.filter((d) => d.label === regionId) ?? []
+		if (targets.length === 0) return
+		setRenderedImageUrl(null)
+		const renderToken = renderTokenRef.current + 1
+		renderTokenRef.current = renderToken
+		setIsRendering(true)
+		let currentImageUrl = renderedImageUrl ?? roomImageUrl
+		try {
+			for (const detection of targets) {
+				if (renderTokenRef.current !== renderToken) return
+				if (!detection.maskUrl) continue
+				const prompt = color
+					? `${material.name} ${color} ${detection.label} finish, realistic, photo`
+					: `${material.name} ${detection.label} texture, realistic, photo`
+				try {
+					const res = await renderTexture({
+						imageUrl: currentImageUrl,
+						maskUrl: detection.maskUrl,
+						prompt,
+						uploadId: detectionResult?.uploadId ?? 'render',
+						label: detection.label,
+						textureUrl: material.assetUrl,
+					})
+					if (renderTokenRef.current !== renderToken) return
+					currentImageUrl = res.renderedUrl
 					setRenderedImageUrl(res.renderedUrl)
-				})
-				.catch(() => {})
+				} catch {
+					// ignore render errors for now
+				}
+			}
+		} finally {
+			if (renderTokenRef.current === renderToken) {
+				setIsRendering(false)
+			}
 		}
 	}
 
@@ -255,17 +312,30 @@ export function MaterialLibrary() {
 				</div>
 				{selectedRegionId && (
 					<div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-800/80">
-						<span className="truncate text-[11px] text-slate-600 dark:text-slate-400">
-							Apply to <span className="font-semibold text-slate-800 dark:text-slate-200">{getBaseLabel(selectedRegionId)}</span>
-						</span>
+						<label className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+							<span>Apply to</span>
+							<select
+								value={applyScope}
+								onChange={(event) =>
+									setApplyScope(event.target.value as 'segment' | 'all')
+								}
+								className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+							>
+								<option value="segment">{segmentScopeLabel}</option>
+								<option value="all">{allScopeLabel}</option>
+							</select>
+						</label>
 						<button
 							type="button"
 							onClick={() => {
-								// Clear all segments of the same category
-								const base = getBaseLabel(selectedRegionId)
-								detectionResult?.detections
-									.filter((d) => getBaseLabel(d.label) === base)
-									.forEach((d) => clearMaterial(d.label))
+								if (applyScope === 'all') {
+									const base = getBaseLabel(selectedRegionId)
+									detectionResult?.detections
+										.filter((d) => getBaseLabel(d.label) === base)
+										.forEach((d) => clearMaterial(d.label))
+									return
+								}
+								clearMaterial(selectedRegionId)
 							}}
 							disabled={!appliedMaterials[selectedRegionId]}
 							className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-200"
@@ -292,11 +362,14 @@ export function MaterialLibrary() {
 								const next = Number(event.target.value)
 								setTextureRotation(next)
 								if (!selectedRegionId) return
-								// Always apply rotation to all segments of the same category
-								const base = getBaseLabel(selectedRegionId)
-								detectionResult?.detections
-									.filter((d) => getBaseLabel(d.label) === base)
-									.forEach((d) => setMaterialRotation(d.label, next))
+								if (applyScope === 'all') {
+									const base = getBaseLabel(selectedRegionId)
+									detectionResult?.detections
+										.filter((d) => getBaseLabel(d.label) === base)
+										.forEach((d) => setMaterialRotation(d.label, next))
+									return
+								}
+								setMaterialRotation(selectedRegionId, next)
 							}}
 							className="mt-2 w-full accent-emerald-600"
 						/>

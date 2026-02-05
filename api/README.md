@@ -31,6 +31,46 @@
 $ npm install
 ```
 
+## Database & storage
+
+### PostgreSQL (Prisma)
+
+Projects are persisted in PostgreSQL. Options:
+
+1. **Docker** (recommended for local dev):
+   ```bash
+   docker compose up postgres -d
+   ```
+   Then set in `api/.env`:
+   ```
+   DATABASE_URL=postgresql://anyohaus:anyohaus@localhost:5432/anyohaus
+   ```
+
+2. **Prisma Postgres** (via `npx prisma dev`): Uses the URL from `prisma dev`.
+
+3. **Cloud** (Render, Supabase, Neon, etc.): Use the provider's connection string.
+
+Apply migrations:
+```bash
+npm run db:migrate
+```
+
+### Blob storage (Cloudflare R2)
+
+Uploads use **Cloudflare R2** when configured (S3-compatible, no egress fees). Without config, files are stored in `api/uploads/`.
+
+1. Create an R2 bucket at [Cloudflare Dashboard](https://dash.cloudflare.com) → R2.
+2. Create API tokens: R2 → Manage R2 API Tokens.
+3. Add to `api/.env` (see `api/.env.example` for full list):
+   ```
+   STORAGE_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   STORAGE_ACCESS_KEY=<your_access_key>
+   STORAGE_SECRET_KEY=<your_secret_key>
+   STORAGE_BUCKET=anyohaus-uploads
+   STORAGE_PUBLIC_URL=https://your-r2-public-domain.com
+   ```
+   For public access, attach a custom domain to the bucket or use Cloudflare Workers.
+
 ## Compile and run the project
 
 ```bash

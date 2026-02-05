@@ -366,6 +366,10 @@ def _read_config(orig_w: int, orig_h: int):
 	shadow_blur_radius = int(os.environ.get("SHADOW_BLUR_RADIUS", "1"))
 	input_size_raw = os.environ.get("SEGMENTATION_INPUT_SIZE", "")
 	input_size = int(input_size_raw) if input_size_raw.isdigit() else None
+	output_max_edge_raw = os.environ.get("SEGMENTATION_OUTPUT_MAX_EDGE", "")
+	output_max_edge = (
+		int(output_max_edge_raw) if output_max_edge_raw.isdigit() else None
+	)
 	if fast_mode:
 		use_shadow_norm = False
 		use_relighting = False
@@ -396,6 +400,7 @@ def _read_config(orig_w: int, orig_h: int):
 		"use_texture_angle": use_texture_angle,
 		"smooth_masks": smooth_masks,
 		"input_size": input_size,
+		"output_max_edge": output_max_edge,
 	}
 
 
@@ -461,8 +466,26 @@ def run_one(
 		else:
 			outputs = model(**inputs)
 	logits = outputs.logits
-	logits = F.interpolate(logits, size=(orig_h, orig_w), mode="bilinear", align_corners=False)
+	output_max_edge = cfg["output_max_edge"]
+	if output_max_edge is not None and max(orig_w, orig_h) > output_max_edge:
+		scale = output_max_edge / float(max(orig_w, orig_h))
+		target_w = max(1, int(round(orig_w * scale)))
+		target_h = max(1, int(round(orig_h * scale)))
+	else:
+		target_w, target_h = orig_w, orig_h
+	logits = F.interpolate(
+		logits,
+		size=(target_h, target_w),
+		mode="bilinear",
+		align_corners=False,
+	)
 	seg = logits.argmax(dim=1)[0].cpu().numpy().astype(np.int32)
+	if target_h != orig_h or target_w != orig_w:
+		seg = cv2.resize(
+			seg.astype(np.uint8),
+			(orig_w, orig_h),
+			interpolation=cv2.INTER_NEAREST,
+		).astype(np.int32)
 	occluder_mask = np.isin(seg, _OCCLUDER_IDS_ARRAY)
 	occluder_dilate = cfg["occluder_dilate_radius"]
 	if occluder_dilate > 0:

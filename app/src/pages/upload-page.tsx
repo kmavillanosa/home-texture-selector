@@ -1,7 +1,13 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { QRCodeSVG } from 'qrcode.react'
 import { useVisualizerStore } from '../store/visualizer-store'
-import { uploadRoomImage, segmentRoom, createProject } from '../api/client'
+import {
+	uploadRoomImage,
+	segmentRoom,
+	createProject,
+	listMobileSessionUploads,
+} from '../api/client'
 import { ImageUploadZone } from '../components/upload/image-upload-zone'
 import { resizeImageForUpload } from '../utils/resize-image'
 import type { Scene } from '../types'
@@ -12,6 +18,7 @@ const LAST_PROJECT_KEY = 'room-visualizer:last-project'
 
 export function UploadPage() {
 	const navigate = useNavigate()
+	const [searchParams, setSearchParams] = useSearchParams()
 	const setRoomImage = useVisualizerStore((s) => s.setRoomImage)
 	const setDetectionResult = useVisualizerStore((s) => s.setDetectionResult)
 	const setHideHeader = useVisualizerStore((s) => s.setHideHeader)
@@ -23,6 +30,74 @@ export function UploadPage() {
 	const [progressTotal, setProgressTotal] = useState(0)
 	const [progressDone, setProgressDone] = useState(0)
 	const runningRef = useRef(false)
+	const [mobileQueue, setMobileQueue] = useState<
+		{ uploadId: string; roomImageUrl: string }[]
+	>([])
+	const knownMobileRef = useRef<Set<string>>(new Set())
+	const sessionId = searchParams.get('session') ?? ''
+	const mobileUrl = useMemo(() => {
+		if (!sessionId) return ''
+		const envOrigin = import.meta.env.VITE_PUBLIC_URL as string | undefined
+		const envHost = "192.168.8.100";
+		const envLanIp = import.meta.env.VITE_LAN_IP as string | undefined
+		const fallbackOrigin = globalThis.location?.origin ?? ''
+		const base =
+			envOrigin && envOrigin.trim().length > 0 ? envOrigin.trim() : fallbackOrigin
+		if (!base) return ''
+		const originUrl = new URL(
+			base.startsWith('http') ? base : `https://${base}`,
+		)
+		const isLocalHost =
+			originUrl.hostname === 'localhost' || originUrl.hostname === '127.0.0.1'
+		const overrideHost =
+			(envHost && envHost.trim().length > 0 && envHost.trim()) ||
+			(envLanIp && envLanIp.trim().length > 0 && envLanIp.trim()) ||
+			''
+		if (isLocalHost && overrideHost) {
+			originUrl.hostname = overrideHost
+		}
+		const url = new URL('/mobile-upload', originUrl.toString())
+		url.searchParams.set('session', sessionId)
+		return url.toString()
+	}, [sessionId])
+
+	useEffect(() => {
+		const existingSession = searchParams.get('session')
+		if (existingSession) return
+		const nextParams = new URLSearchParams(searchParams)
+		nextParams.set('session', String(Date.now()))
+		setSearchParams(nextParams, { replace: true })
+	}, [searchParams, setSearchParams])
+
+	useEffect(() => {
+		if (!sessionId) return
+		let isMounted = true
+		const poll = async () => {
+			try {
+				const list = await listMobileSessionUploads(sessionId)
+				if (!isMounted) return
+				const fresh = list.filter((item) => !knownMobileRef.current.has(item.uploadId))
+				if (fresh.length > 0) {
+					fresh.forEach((item) => knownMobileRef.current.add(item.uploadId))
+					setMobileQueue((prev) => [
+						...prev,
+						...fresh.map((item) => ({
+							uploadId: item.uploadId,
+							roomImageUrl: item.roomImageUrl,
+						})),
+					])
+				}
+			} catch {
+				// ignore polling errors
+			}
+		}
+		poll()
+		const timer = window.setInterval(poll, 4000)
+		return () => {
+			isMounted = false
+			window.clearInterval(timer)
+		}
+	}, [sessionId])
 
 	const handleFileSelect = useCallback((selected: File[]) => {
 		setError(null)
@@ -84,6 +159,7 @@ export function UploadPage() {
 						roomImageUrl,
 						detectionResult: result,
 						appliedMaterials: {},
+						notes: '',
 					})
 					setProgressDone(i + 1)
 					if (i === 0) {
@@ -126,8 +202,77 @@ export function UploadPage() {
 		})()
 	}, [files, navigate, setRoomImage, setDetectionResult])
 
+	useEffect(() => {
+		if (mobileQueue.length === 0 || runningRef.current || files.length > 0) return
+		runningRef.current = true
+		setIsAnalyzing(true)
+		setProgressTotal(mobileQueue.length)
+		setProgressDone(0)
+		setError(null)
+		;(async () => {
+			try {
+				const scenes: Scene[] = []
+				for (let i = 0; i < mobileQueue.length; i += 1) {
+					const item = mobileQueue[i]
+					const result = await segmentRoom({
+						uploadId: item.uploadId,
+						imageUrl: item.roomImageUrl,
+					})
+					scenes.push({
+						id: item.uploadId,
+						name: `Mobile scene ${i + 1}`,
+						roomImageUrl: item.roomImageUrl,
+						detectionResult: result,
+						appliedMaterials: {},
+						notes: '',
+					})
+					setProgressDone(i + 1)
+					if (i === 0) {
+						setRoomImage(item.roomImageUrl)
+						setDetectionResult(result)
+					}
+				}
+				if (scenes.length === 0) {
+					throw new Error('No mobile images to process.')
+				}
+				let projectId: string | null = null
+				try {
+					const project = await createProject({
+						name: 'Mobile capture session',
+						roomImageUrl: scenes[0].roomImageUrl,
+						detectionResult: scenes[0].detectionResult,
+						scenes,
+					})
+					projectId = project.id
+					localStorage.setItem(LAST_PROJECT_KEY, projectId)
+				} catch (projectErr) {
+					console.error('Failed to create project', projectErr)
+				}
+				if (projectId) {
+					navigate(`/visualizer?project=${projectId}`, { replace: true })
+				} else {
+					navigate('/visualizer', { replace: true })
+				}
+			} catch (err) {
+				setError(err instanceof Error ? err.message : 'Mobile upload failed.')
+			} finally {
+				setIsAnalyzing(false)
+				setProgressTotal(0)
+				setProgressDone(0)
+				setMobileQueue([])
+				runningRef.current = false
+			}
+		})()
+	}, [
+		files.length,
+		mobileQueue,
+		navigate,
+		setDetectionResult,
+		setRoomImage,
+	])
+
 	return (
-		<div className="relative flex h-full w-full items-center justify-center px-4 py-10 sm:px-8">
+		<div className="relative flex min-h-full w-full items-start justify-center px-4 py-10 sm:px-8">
 			{previewUrls.length > 0 && (
 				<div className="absolute inset-0 z-0 bg-slate-950/95">
 					<img
@@ -142,7 +287,7 @@ export function UploadPage() {
 					)}
 				</div>
 			)}
-			<div className="relative z-10 w-full max-w-3xl">
+			<div className="relative z-10 w-full max-w-4xl">
 				<div className="mb-8">
 					<p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
 						Upload your room
@@ -178,14 +323,46 @@ export function UploadPage() {
 						</ul>
 					</div>
 				</div>
-				{!isAnalyzing && (
-					<ImageUploadZone
-						files={files}
-						onFileSelect={handleFileSelect}
-						accept={ALLOWED_TYPES.join(',')}
-						maxSizeBytes={MAX_SIZE_MB * 1024 * 1024}
-					/>
-				)}
+				<div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-8">
+					<div className="flex h-full flex-1 flex-col">
+						{!isAnalyzing && (
+							<ImageUploadZone
+								files={files}
+								onFileSelect={handleFileSelect}
+								accept={ALLOWED_TYPES.join(',')}
+								maxSizeBytes={MAX_SIZE_MB * 1024 * 1024}
+							/>
+						)}
+					</div>
+					{mobileUrl && (
+						<div className="w-full lg:max-w-xs lg:justify-self-end">
+							<div className="flex h-full min-h-[240px] flex-col rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+								<p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+									Scan to capture on phone
+								</p>
+								<p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+									Photos will return to this session after you hit Send on mobile.
+								</p>
+								<div className="mt-4 flex flex-1 flex-wrap items-center gap-4">
+									<div className="rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-950">
+										<QRCodeSVG value={mobileUrl} size={148} />
+									</div>
+									<div className="text-xs text-slate-500 dark:text-slate-400">
+										<p className="font-semibold text-slate-600 dark:text-slate-300">
+											Session
+										</p>
+										<p className="mt-1 rounded-full border border-slate-200 px-2 py-0.5 text-[11px] dark:border-slate-700">
+											{sessionId}
+										</p>
+										<p className="mt-3 break-all text-[11px] text-slate-400">
+											{mobileUrl}
+										</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					)}
+				</div>
 				{isAnalyzing && (
 					<div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
 						<div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-200/80 bg-white px-10 py-8 shadow-lg dark:border-slate-600 dark:bg-slate-800">

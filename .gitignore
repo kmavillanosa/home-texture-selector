@@ -18,5 +18,6 @@ pnpm-debug.log*
 .env.*
 api/cache/
 api/uploads/
+api/python/ckpts/
 .DS_Store
 Thumbs.db

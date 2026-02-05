@@ -64,6 +64,7 @@ export interface SceneDto {
 	segmentationResult?: SegmentationResult
 	detectionResult?: DetectionResult
 	appliedMaterials?: Record<string, string>
+	notes?: string
 }
 
 export interface ProjectDto {
@@ -105,4 +106,5 @@ export interface UpdateProjectDto {
 	name?: string
 	thumbnailUrl?: string
 	appliedMaterials?: Record<string, string>
+	scenes?: SceneDto[]
 }

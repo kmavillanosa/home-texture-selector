@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto'
 import { Injectable } from '@nestjs/common'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -11,8 +10,7 @@ import type {
 	SceneDto,
 } from '../common/types'
 import { SegmentService } from '../segment/segment.service'
-
-const store = new Map<string, ProjectDto>()
+import { PrismaService } from '../prisma/prisma.service'
 
 const SAMPLE_PROJECT_ID = 'sample'
 const SAMPLE_PROJECT_PREFIX = 'sample-'
@@ -25,7 +23,10 @@ const UPLOADS_DIR = path.join(process.cwd(), 'uploads')
 
 @Injectable()
 export class ProjectsService {
-	constructor(private readonly segmentService: SegmentService) {}
+	constructor(
+		private readonly segmentService: SegmentService,
+		private readonly prisma: PrismaService,
+	) {}
 
 	async getOrCreateSample(): Promise<ProjectDto | undefined> {
 		return this.getOrCreateSampleByUploadId(
@@ -57,41 +58,32 @@ export class ProjectsService {
 		return this.getSampleGroupsByBatch()
 	}
 
-	create(dto: CreateProjectDto): ProjectDto {
-		const now = new Date().toISOString()
+	async create(dto: CreateProjectDto): Promise<ProjectDto> {
 		const firstScene = dto.scenes?.[0]
-		const project: ProjectDto = {
-			id: randomUUID(),
-			name: dto.name,
-			roomImageUrl: firstScene?.roomImageUrl ?? dto.roomImageUrl,
-			segmentationResult: firstScene?.segmentationResult ?? dto.segmentationResult,
-			detectionResult: firstScene?.detectionResult ?? dto.detectionResult,
-			appliedMaterials: firstScene?.appliedMaterials ?? dto.appliedMaterials ?? {},
-			scenes: dto.scenes,
-			createdAt: now,
-			updatedAt: now,
-		}
-		store.set(project.id, project)
-		return project
+		const project = await this.prisma.project.create({
+			data: {
+				name: dto.name,
+				roomImageUrl: firstScene?.roomImageUrl ?? dto.roomImageUrl,
+				segmentationResult: (firstScene?.segmentationResult ??
+					dto.segmentationResult) as object | undefined,
+				detectionResult: (firstScene?.detectionResult ??
+					dto.detectionResult) as object | undefined,
+				appliedMaterials: (firstScene?.appliedMaterials ??
+					dto.appliedMaterials ?? {}) as object | undefined,
+				scenes: dto.scenes as object | undefined,
+			},
+		})
+		return this.toProjectDto(project)
 	}
 
-	list(): ProjectDto[] {
-		return Array.from(store.values()).sort(
-			(a, b) =>
-				new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-		)
+	async list(): Promise<ProjectDto[]> {
+		const rows = await this.prisma.project.findMany({
+			orderBy: { updatedAt: 'desc' },
+		})
+		return rows.map((r) => this.toProjectDto(r))
 	}
 
 	async get(id: string): Promise<ProjectDto | undefined> {
-		const existing = store.get(id)
-		if (existing) {
-			if (this.isSampleProjectId(id)) {
-				const reset = this.resetSampleProject(existing)
-				store.set(id, reset)
-				return reset
-			}
-			return existing
-		}
 		if (id.startsWith(SAMPLE_GROUP_PREFIX)) {
 			const index = parseInt(id.slice(SAMPLE_GROUP_PREFIX.length), 10)
 			if (!Number.isNaN(index) && index >= 0) {
@@ -99,29 +91,38 @@ export class ProjectsService {
 			}
 			return undefined
 		}
-		if (!id.startsWith(SAMPLE_PROJECT_PREFIX)) return undefined
-		const uploadId = id.slice(SAMPLE_PROJECT_PREFIX.length)
-		const roomImageUrl = this.getUploadImageUrl(uploadId, this.listUploadFiles())
-		if (!roomImageUrl) return undefined
-		return this.getOrCreateSampleByUploadId(id, uploadId, roomImageUrl)
+		if (id.startsWith(SAMPLE_PROJECT_PREFIX)) {
+			const uploadId = id.slice(SAMPLE_PROJECT_PREFIX.length)
+			const roomImageUrl = this.getUploadImageUrl(
+				uploadId,
+				this.listUploadFiles(),
+			)
+			if (!roomImageUrl) return undefined
+			return this.getOrCreateSampleByUploadId(id, uploadId, roomImageUrl)
+		}
+		const row = await this.prisma.project.findUnique({ where: { id } })
+		if (!row) return undefined
+		return this.toProjectDto(row)
 	}
 
-	update(id: string, dto: UpdateProjectDto): ProjectDto | undefined {
-		const project = store.get(id)
-		if (!project) return undefined
-		if (this.isSampleProjectId(id)) {
-			const reset = this.resetSampleProject(project)
-			reset.updatedAt = new Date().toISOString()
-			store.set(id, reset)
-			return reset
-		}
-		if (dto.name !== undefined) project.name = dto.name
-		if (dto.thumbnailUrl !== undefined) project.thumbnailUrl = dto.thumbnailUrl
-		if (dto.appliedMaterials !== undefined)
-			project.appliedMaterials = dto.appliedMaterials
-		project.updatedAt = new Date().toISOString()
-		store.set(id, project)
-		return project
+	async update(id: string, dto: UpdateProjectDto): Promise<ProjectDto | undefined> {
+		if (this.isSampleProjectId(id)) return undefined
+		const row = await this.prisma.project.update({
+			where: { id },
+			data: {
+				...(dto.name !== undefined && { name: dto.name }),
+				...(dto.thumbnailUrl !== undefined && {
+					thumbnailUrl: dto.thumbnailUrl,
+				}),
+				...(dto.appliedMaterials !== undefined && {
+					appliedMaterials: dto.appliedMaterials as object,
+				}),
+				...(dto.scenes !== undefined && {
+					scenes: dto.scenes as object,
+				}),
+			},
+		})
+		return this.toProjectDto(row)
 	}
 
 	private getSampleUploadIds(): string[] {
@@ -203,12 +204,14 @@ export class ProjectsService {
 		return `/uploads/${match}`
 	}
 
+	private sampleCache = new Map<string, ProjectDto>()
+
 	private async getOrCreateSampleByUploadId(
 		projectId: string,
 		uploadId: string,
 		roomImageUrl: string,
 	): Promise<ProjectDto | undefined> {
-		const existing = store.get(projectId)
+		const existing = this.sampleCache.get(projectId)
 		if (existing) return existing
 		try {
 			const result = await this.segmentService.segment(uploadId, roomImageUrl)
@@ -222,7 +225,7 @@ export class ProjectsService {
 				createdAt: now,
 				updatedAt: now,
 			}
-			store.set(projectId, project)
+			this.sampleCache.set(projectId, project)
 			return project
 		} catch {
 			return undefined
@@ -237,7 +240,7 @@ export class ProjectsService {
 		const group = groups[groupIndex]
 		if (!group || group.samples.length === 0) return undefined
 		const groupId = group.groupId
-		const existing = store.get(groupId)
+		const existing = this.sampleCache.get(groupId)
 		if (existing) return existing
 		const scenes: SceneDto[] = []
 		for (const sample of group.samples) {
@@ -267,8 +270,34 @@ export class ProjectsService {
 			createdAt: now,
 			updatedAt: now,
 		}
-		store.set(groupId, project)
+		this.sampleCache.set(groupId, project)
 		return project
+	}
+
+	private toProjectDto(row: {
+		id: string
+		name: string
+		thumbnailUrl: string | null
+		roomImageUrl: string
+		segmentationResult: unknown
+		detectionResult: unknown
+		appliedMaterials: unknown
+		scenes: unknown
+		createdAt: Date
+		updatedAt: Date
+	}): ProjectDto {
+		return {
+			id: row.id,
+			name: row.name,
+			thumbnailUrl: row.thumbnailUrl ?? undefined,
+			roomImageUrl: row.roomImageUrl,
+			segmentationResult: row.segmentationResult as ProjectDto['segmentationResult'],
+			detectionResult: row.detectionResult as ProjectDto['detectionResult'],
+			appliedMaterials: (row.appliedMaterials as Record<string, string>) ?? {},
+			scenes: row.scenes as ProjectDto['scenes'],
+			createdAt: row.createdAt.toISOString(),
+			updatedAt: row.updatedAt.toISOString(),
+		}
 	}
 
 	private isSampleProjectId(id: string) {

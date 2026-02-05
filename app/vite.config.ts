@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 
 const apiPort = process.env.API_PORT ?? 3000
-const apiTarget = `http://localhost:${apiPort}`
+// In Docker, use service name; locally, use localhost
+const apiHost = process.env.API_HOST ?? 'localhost'
+const apiTarget = `http://${apiHost}:${apiPort}`
 
 export default defineConfig({
 	base: process.env.BASE_URL ?? '/',

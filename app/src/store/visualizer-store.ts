@@ -1,12 +1,11 @@
 import { create } from 'zustand'
-import type { DetectionResult, Material } from '../types'
+import type {
+	AppliedMaterialSnapshot,
+	DetectionResult,
+	Material,
+} from '../types'
 
-export interface AppliedMaterial {
-	materialId: string
-	color: string
-	assetUrl: string
-	rotation: number
-}
+export type AppliedMaterial = AppliedMaterialSnapshot
 
 interface VisualizerState {
 	roomImageUrl: string | null
@@ -17,7 +16,9 @@ interface VisualizerState {
 	selectedRegionId: string | null
 	appliedMaterials: Record<string, AppliedMaterial>
 	renderedImageUrl: string | null
+	isRendering: boolean
 	hideHeader: boolean
+	notesDraft: string
 	setRoomImage: (url: string | null) => void
 	setDetectionResult: (result: DetectionResult | null) => void
 	setScale: (scale: number) => void
@@ -25,8 +26,10 @@ interface VisualizerState {
 	setSelectedMaterial: (material: Material | null) => void
 	setSelectedRegionId: (regionId: string | null) => void
 	setRenderedImageUrl: (url: string | null) => void
+	setIsRendering: (isRendering: boolean) => void
 	setAppliedMaterials: (materials: Record<string, AppliedMaterial>) => void
 	setHideHeader: (hide: boolean) => void
+	setNotesDraft: (notes: string) => void
 	applyMaterial: (regionId: string, material: Material, rotation?: number) => void
 	setMaterialRotation: (regionId: string, rotation: number) => void
 	clearMaterial: (regionId: string) => void
@@ -44,7 +47,9 @@ const initialState = {
 	selectedRegionId: null as string | null,
 	appliedMaterials: {} as Record<string, AppliedMaterial>,
 	renderedImageUrl: null as string | null,
+	isRendering: false,
 	hideHeader: false,
+	notesDraft: '',
 }
 
 export const useVisualizerStore = create<VisualizerState>((set) => ({
@@ -56,8 +61,10 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
 	setSelectedMaterial: (selectedMaterial) => set({ selectedMaterial }),
 	setSelectedRegionId: (selectedRegionId) => set({ selectedRegionId }),
 	setRenderedImageUrl: (renderedImageUrl) => set({ renderedImageUrl }),
+	setIsRendering: (isRendering) => set({ isRendering }),
 	setAppliedMaterials: (appliedMaterials) => set({ appliedMaterials }),
 	setHideHeader: (hideHeader) => set({ hideHeader }),
+	setNotesDraft: (notesDraft) => set({ notesDraft }),
 	applyMaterial: (regionId, material, rotation) =>
 		set((state) => ({
 			appliedMaterials: {
@@ -87,7 +94,8 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
 			delete next[regionId]
 			return { appliedMaterials: next }
 		}),
-	clearAllMaterials: () => set({ appliedMaterials: {}, renderedImageUrl: null }),
+	clearAllMaterials: () =>
+		set({ appliedMaterials: {}, renderedImageUrl: null, isRendering: false }),
 	resetView: () => set({ scale: 1, pan: { x: 0, y: 0 } }),
 	reset: () => set(initialState),
 }))

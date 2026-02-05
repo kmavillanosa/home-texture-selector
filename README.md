@@ -9,6 +9,26 @@ An interactive room materials studio similar to Roomvo: upload a photo of your r
 
 ## Quick start
 
+### Option 1: Docker (Recommended)
+
+Hot reload development environment with Docker Compose:
+
+```bash
+# Start all services (Postgres, API, App)
+docker compose up
+
+# Or in background
+docker compose up -d
+```
+
+- **Frontend**: http://localhost:5173 (Vite HMR)
+- **API**: http://localhost:3000 (NestJS watch mode)
+- **Postgres**: localhost:5432
+
+See [README.DOCKER.md](README.DOCKER.md) for details.
+
+### Option 2: Local Development
+
 1. **API** (port 3000). No API key required; object detection uses TensorFlow.js COCO-SSD.
 
    ```bash

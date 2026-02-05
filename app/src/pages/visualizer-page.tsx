@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { NotesPad } from "../components/notes/notes-pad";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { RoomCanvas } from "../components/canvas/room-canvas";
 import { useVisualizerStore } from "../store/visualizer-store";
-import { getProject } from "../api/client";
+import { getProject, updateProject } from "../api/client";
 import { Toolbar } from "../components/controls/toolbar";
 import { SaveShare } from "../components/save/save-share";
 import { DownloadPreview } from "../components/save/download-preview";
@@ -11,6 +12,48 @@ import type { Scene } from "../types";
 import type { AppliedMaterial } from "../store/visualizer-store";
 
 const LAST_PROJECT_KEY = "room-visualizer:last-project";
+const MATERIAL_OVERLAY_OPACITY = 0.82;
+
+const isAppliedMaterialValue = (value: unknown): value is AppliedMaterial =>
+  Boolean(value && typeof value === "object" && "materialId" in value);
+
+const resolveSceneApplied = (
+  applied: Scene["appliedMaterials"] | undefined,
+  fallback: Record<string, AppliedMaterial>,
+) => {
+  if (!applied) return {};
+  const resolved: Record<string, AppliedMaterial> = {};
+  Object.entries(applied).forEach(([key, value]) => {
+    if (isAppliedMaterialValue(value)) {
+      resolved[key] = value;
+      return;
+    }
+    if (typeof value === "string") {
+      const match = Object.values(fallback).find(
+        (material) => material.materialId === value,
+      );
+      if (match) resolved[key] = match;
+    }
+  });
+  return resolved;
+};
+
+const areAppliedMaterialsEqual = (
+  a: Record<string, AppliedMaterial>,
+  b: Record<string, AppliedMaterial>,
+) =>
+  Object.keys(a).length === Object.keys(b).length &&
+  Object.keys(a).every((key) => {
+    const left = a[key];
+    const right = b[key];
+    return (
+      right &&
+      left.materialId === right.materialId &&
+      left.assetUrl === right.assetUrl &&
+      left.color === right.color &&
+      left.rotation === right.rotation
+    );
+  });
 
 export function VisualizerPage() {
   const [searchParams] = useSearchParams();
@@ -27,10 +70,8 @@ export function VisualizerPage() {
   const appliedMaterials = useVisualizerStore((s) => s.appliedMaterials);
   const roomImageUrl = useVisualizerStore((s) => s.roomImageUrl);
   const renderedImageUrl = useVisualizerStore((s) => s.renderedImageUrl);
-  const selectedMaterial = useVisualizerStore((s) => s.selectedMaterial);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
-  const [isLargeSceneView, setIsLargeSceneView] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
@@ -42,8 +83,17 @@ export function VisualizerPage() {
     height: 0,
   });
   const [hoveredModalLabel, setHoveredModalLabel] = useState<string | null>(null);
+  const [isModalNotesOpen, setIsModalNotesOpen] = useState(false);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<"materials" | "notes">(
+    "materials",
+  );
   const appliedMaterialsRef = useRef(appliedMaterials);
   const lastSelectedBaseRef = useRef<string | null>(null);
+  const lastNotesKeyRef = useRef<string>("");
+  const notesDraft = useVisualizerStore((s) => s.notesDraft);
+  const setNotesDraft = useVisualizerStore((s) => s.setNotesDraft);
+  const lastSceneIdRef = useRef<string | null>(null);
+  const scenesFallbackRef = useRef<Scene[]>([]);
   const visibleDetections = useMemo(
     () =>
       detectionResult?.detections.filter((d) =>
@@ -52,26 +102,73 @@ export function VisualizerPage() {
     [detectionResult]
   );
 
-  const previewImageUrl = renderedImageUrl ?? roomImageUrl;
   const selectedBase = selectedRegionId ? getBaseLabel(selectedRegionId) : null;
   const selectedBaseDetections = selectedBase
     ? visibleDetections.filter((d) => getBaseLabel(d.label) === selectedBase)
     : [];
-  const previewMaskUrls = selectedBaseDetections
-    .map((d) => d.maskUrl)
-    .filter(Boolean) as string[];
-  const appliedMaterial = selectedRegionId
-    ? appliedMaterials[selectedRegionId] ?? null
-    : null;
-  const previewMaterialColor =
-    (selectedMaterial?.metadata?.color as string | undefined) ??
-    appliedMaterial?.color ??
-    null;
-  const previewMaterialTexture =
-    selectedMaterial?.assetUrl ?? appliedMaterial?.assetUrl ?? null;
-  const previewMaterialRotation = appliedMaterial?.rotation ?? 0;
-  const previewDetection =
-    selectedBaseDetections.length > 0 ? selectedBaseDetections[0] : null;
+  const previewAppliedDetections = useMemo(
+    () =>
+      (!renderedImageUrl || isMaterialModalOpen || isPreviewFullscreen)
+        ? visibleDetections
+            .map((d) => {
+              const applied = appliedMaterials[d.label];
+              if (!applied || !d.maskUrl) return null;
+              return { detection: d, applied, maskUrl: d.maskUrl };
+            })
+            .filter(
+              (
+                item,
+              ): item is {
+                detection: (typeof visibleDetections)[number];
+                applied: AppliedMaterial;
+                maskUrl: string;
+              } => Boolean(item),
+            )
+        : [],
+    [
+      appliedMaterials,
+      renderedImageUrl,
+      visibleDetections,
+      isMaterialModalOpen,
+      isPreviewFullscreen,
+    ],
+  );
+  const scenesForUi = scenes.length > 0 ? scenes : scenesFallbackRef.current;
+  const activeScene = useMemo(
+    () => scenesForUi.find((scene) => scene.id === activeSceneId) ?? null,
+    [activeSceneId, scenesForUi],
+  );
+  const previewImageUrl = renderedImageUrl ?? roomImageUrl;
+  const modalPreviewImageUrl =
+    activeScene?.roomImageUrl ?? roomImageUrl ?? previewImageUrl;
+  const activeSceneIndex = useMemo(
+    () => scenesForUi.findIndex((scene) => scene.id === activeSceneId),
+    [activeSceneId, scenesForUi],
+  );
+  const goPrevScene = () => {
+    if (scenesForUi.length === 0) return;
+    const currentIndex = activeSceneIndex < 0 ? 0 : activeSceneIndex;
+    const nextIndex =
+      (currentIndex - 1 + scenesForUi.length) % scenesForUi.length;
+    setActiveSceneId(scenesForUi[nextIndex]?.id ?? null);
+  };
+  const goNextScene = () => {
+    if (scenesForUi.length === 0) return;
+    const currentIndex = activeSceneIndex < 0 ? 0 : activeSceneIndex;
+    const nextIndex = (currentIndex + 1) % scenesForUi.length;
+    setActiveSceneId(scenesForUi[nextIndex]?.id ?? null);
+  };
+  const sceneNotesKey = useMemo(() => getSceneNotesKey(scenes), [scenes]);
+  const normalizeNotesHtml = (raw: string) => {
+    if (!raw) return "";
+    const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(raw);
+    if (looksLikeHtml) return raw;
+    return raw
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br />");
+  };
 
   const getContainRect = (
     containerW: number,
@@ -171,9 +268,44 @@ export function VisualizerPage() {
               ];
         setScenes(incomingScenes);
         setActiveSceneId(incomingScenes[0]?.id ?? null);
+        lastNotesKeyRef.current = getSceneNotesKey(incomingScenes);
       })
       .catch(() => {});
   }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId || scenes.length === 0) return;
+    if (sceneNotesKey === lastNotesKeyRef.current) return;
+    const timeout = window.setTimeout(() => {
+      updateProject(projectId, { scenes }).catch(() => {});
+      lastNotesKeyRef.current = sceneNotesKey;
+    }, 600);
+    return () => window.clearTimeout(timeout);
+  }, [projectId, sceneNotesKey, scenes]);
+
+  const handleSceneNotesChange = (nextNotes: string) => {
+    if (!activeSceneId) return;
+    setScenes((prev) =>
+      prev.map((scene) =>
+        scene.id === activeSceneId ? { ...scene, notes: nextNotes } : scene,
+      ),
+    );
+  };
+
+  useEffect(() => {
+    if (!activeSceneId || lastSceneIdRef.current === activeSceneId) return;
+    lastSceneIdRef.current = activeSceneId;
+    setNotesDraft(normalizeNotesHtml(activeScene?.notes ?? ""));
+  }, [activeScene?.notes, activeSceneId]);
+
+  useEffect(() => {
+    if (!activeSceneId) return;
+    if ((activeScene?.notes ?? "") === notesDraft) return;
+    const timeout = window.setTimeout(() => {
+      handleSceneNotesChange(notesDraft);
+    }, 400);
+    return () => window.clearTimeout(timeout);
+  }, [activeScene?.notes, activeSceneId, notesDraft]);
 
   useEffect(() => {
     if (!detectionResult || selectedRegionId) return;
@@ -201,34 +333,26 @@ export function VisualizerPage() {
 
   useEffect(() => {
     if (!activeSceneId) return;
-    const scene = scenes.find((item) => item.id === activeSceneId);
+    const scene = scenesForUi.find((item) => item.id === activeSceneId);
     if (!scene) return;
+    const sceneApplied = resolveSceneApplied(
+      scene.appliedMaterials,
+      appliedMaterialsRef.current,
+    );
     const baseMaterials = new Map<string, AppliedMaterial>();
-    Object.entries(appliedMaterialsRef.current).forEach(([label, material]) => {
+    Object.entries(sceneApplied).forEach(([label, material]) => {
       baseMaterials.set(getBaseLabel(label), material);
     });
     const nextApplied: Record<string, AppliedMaterial> = {};
     scene.detectionResult?.detections.forEach((d) => {
       const base = getBaseLabel(d.label);
-      const material = baseMaterials.get(base);
+      const material = sceneApplied[d.label] ?? baseMaterials.get(base);
       if (material) {
         nextApplied[d.label] = material;
       }
     });
     const currentApplied = appliedMaterialsRef.current;
-    const isSame =
-      Object.keys(nextApplied).length === Object.keys(currentApplied).length &&
-      Object.keys(nextApplied).every((key) => {
-        const a = nextApplied[key];
-        const b = currentApplied[key];
-        return (
-          b &&
-          a.materialId === b.materialId &&
-          a.assetUrl === b.assetUrl &&
-          a.color === b.color &&
-          a.rotation === b.rotation
-        );
-      });
+    const isSame = areAppliedMaterialsEqual(nextApplied, currentApplied);
     setRoomImage(scene.roomImageUrl);
     setDetectionResult(scene.detectionResult ?? null);
     if (!isSame) {
@@ -247,7 +371,7 @@ export function VisualizerPage() {
     setRenderedImageUrl(null);
   }, [
     activeSceneId,
-    scenes,
+    scenesForUi,
     setAppliedMaterials,
     setDetectionResult,
     setRenderedImageUrl,
@@ -259,6 +383,39 @@ export function VisualizerPage() {
   useEffect(() => {
     appliedMaterialsRef.current = appliedMaterials;
   }, [appliedMaterials]);
+
+  useEffect(() => {
+    if (scenes.length > 0) {
+      scenesFallbackRef.current = scenes;
+    }
+  }, [scenes]);
+
+  useEffect(() => {
+    if (scenes.length === 0 && scenesFallbackRef.current.length > 0) {
+      setScenes(scenesFallbackRef.current);
+    }
+  }, [scenes]);
+
+  useEffect(() => {
+    if (!activeSceneId) return;
+    setScenes((prev) => {
+      const sceneIndex = prev.findIndex((scene) => scene.id === activeSceneId);
+      if (sceneIndex < 0) return prev;
+      const current = resolveSceneApplied(
+        prev[sceneIndex].appliedMaterials,
+        appliedMaterials,
+      );
+      if (areAppliedMaterialsEqual(current, appliedMaterials)) {
+        return prev;
+      }
+      const next = [...prev];
+      next[sceneIndex] = {
+        ...next[sceneIndex],
+        appliedMaterials: appliedMaterials,
+      };
+      return next;
+    });
+  }, [activeSceneId, appliedMaterials]);
 
   useEffect(() => {
     if (!isMaterialModalOpen) return;
@@ -319,8 +476,68 @@ export function VisualizerPage() {
       {/* Canvas + sidebars + scenes strip */}
       <div className="relative min-h-0 flex-1 overflow-hidden bg-slate-100 dark:bg-slate-950">
         <div className="flex h-full flex-col">
-          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-            <aside className="flex w-full shrink-0 flex-col border-b border-slate-200/70 bg-white/90 p-3 backdrop-blur-sm dark:border-slate-800/70 dark:bg-slate-950/70 lg:w-56 lg:border-b-0 lg:border-r">
+          <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:flex-nowrap">
+            <aside className="flex w-full shrink-0 flex-col border-b border-slate-200/70 bg-white/90 dark:border-slate-800/70 dark:bg-slate-950/70 lg:w-44 lg:shrink-0 lg:border-b-0 lg:border-r">
+              <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Scenes
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+                {scenesForUi.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 px-2 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                    No scenes
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {scenesForUi.map((scene, index) => {
+                      const isActive = scene.id === activeSceneId;
+                      const imageHeight = "h-20";
+                      return (
+                        <button
+                          key={scene.id}
+                          type="button"
+                          onClick={() => setActiveSceneId(scene.id)}
+                          className={`group flex w-full flex-col overflow-hidden rounded-xl border text-left shadow-sm transition-all ${
+                            isActive
+                              ? "border-emerald-500/80 bg-emerald-50/80 shadow-md"
+                              : "border-slate-200/80 bg-white/80 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-950/70"
+                          }`}
+                        >
+                          <div
+                            className={`relative ${imageHeight} w-full overflow-hidden bg-slate-100/80 dark:bg-slate-900/60`}
+                          >
+                            {scene.roomImageUrl ? (
+                              <img
+                                src={scene.roomImageUrl}
+                                alt={scene.name}
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
+                                No preview
+                              </div>
+                            )}
+                            {isActive && (
+                              <span className="absolute right-2 top-2 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] font-medium text-slate-700 dark:text-slate-200">
+                            <span className="truncate">
+                              {scene.name || `Scene ${index + 1}`}
+                            </span>
+                            <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                              {index + 1}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </aside>
+            <aside className="flex w-full shrink-0 flex-col border-b border-slate-200/70 bg-white/90 p-3 backdrop-blur-sm dark:border-slate-800/70 dark:bg-slate-950/70 lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Surfaces
               </div>
@@ -366,91 +583,87 @@ export function VisualizerPage() {
                 )}
               </div>
             </aside>
-            <div className="relative min-h-0 flex-1">
-              <RoomCanvas />
+            <div className="relative min-h-0 flex-1 lg:min-w-0">
+              <RoomCanvas onDoubleClick={() => setIsPreviewFullscreen(true)} />
             </div>
-            <aside className="flex w-full shrink-0 flex-col border-t border-slate-200/70 bg-white/90 dark:border-slate-800/70 dark:bg-slate-950/70 lg:w-72 lg:border-l lg:border-t-0">
-              <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <span>Materials</span>
-                <button
-                  type="button"
-                  onClick={() => setIsMaterialModalOpen(true)}
-                  className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-300 dark:hover:text-slate-100"
-                >
-                  Open materials
-                </button>
-              </div>
-              <div className="max-h-64 overflow-y-auto lg:max-h-none">
-                <MaterialLibrary />
-              </div>
-            </aside>
-          </div>
-          <div className="border-t border-slate-200/70 bg-white/90 px-4 py-3 dark:border-slate-800/70 dark:bg-slate-950/70">
-            <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              <span>Scenes</span>
-              <button
-                type="button"
-                onClick={() => setIsLargeSceneView((prev) => !prev)}
-                className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-300 dark:hover:text-slate-100"
-                aria-pressed={isLargeSceneView}
-              >
-                {isLargeSceneView ? "Small view" : "Large view"}
-              </button>
-            </div>
-            <div className="flex items-center gap-3 overflow-x-auto pb-1">
-              {scenes.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No scenes available.
+            <aside className="flex w-full shrink-0 border-t border-slate-200/70 bg-white/90 dark:border-slate-800/70 dark:bg-slate-950/70 lg:w-80 lg:shrink-0 lg:border-l lg:border-t-0">
+              <div className="flex min-h-0 w-full">
+                <div className="flex w-10 shrink-0 flex-col border-r border-slate-200/70 bg-slate-50/80 dark:border-slate-800/70 dark:bg-slate-900/60">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSidebarTab("materials")}
+                    className={`flex h-24 items-center justify-center text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+                      activeSidebarTab === "materials"
+                        ? "bg-white text-emerald-600 shadow-sm dark:bg-slate-950"
+                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
+                    style={{ writingMode: "vertical-rl" }}
+                    aria-pressed={activeSidebarTab === "materials"}
+                  >
+                    Materials
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSidebarTab("notes")}
+                    className={`flex h-24 items-center justify-center text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+                      activeSidebarTab === "notes"
+                        ? "bg-white text-emerald-600 shadow-sm dark:bg-slate-950"
+                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
+                    style={{ writingMode: "vertical-rl" }}
+                    aria-pressed={activeSidebarTab === "notes"}
+                  >
+                    Notes
+                  </button>
                 </div>
-              ) : (
-                scenes.map((scene, index) => {
-                  const isActive = scene.id === activeSceneId;
-                  const cardWidth = isLargeSceneView ? "w-32 sm:w-40" : "w-20 sm:w-24";
-                  const imageHeight = isLargeSceneView ? "h-20" : "h-10 sm:h-12";
-                  return (
-                    <button
-                      key={scene.id}
-                      type="button"
-                      onClick={() => setActiveSceneId(scene.id)}
-                      className={`group flex ${cardWidth} shrink-0 flex-col overflow-hidden rounded-2xl border text-left shadow-sm transition-all ${
-                        isActive
-                          ? "border-emerald-500 bg-emerald-50/70 shadow-md"
-                          : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-950"
-                      }`}
-                    >
-                      <div className={`relative ${imageHeight} w-full overflow-hidden bg-slate-100`}>
-                        {scene.roomImageUrl ? (
-                          <img
-                            src={scene.roomImageUrl}
-                            alt={scene.name}
-                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
-                            No preview
-                          </div>
-                        )}
-                        <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-slate-950/25 via-transparent to-transparent" />
-                        {isActive && (
-                          <span className="absolute right-2 top-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                            Active
+                <div className="flex min-h-0 flex-1 flex-col">
+                  {activeSidebarTab === "materials" ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <span>Materials</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsMaterialModalOpen(true)}
+                          className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-300 dark:hover:text-slate-100"
+                        >
+                          Browse
+                        </button>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto lg:max-h-none">
+                        <MaterialLibrary />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <span>Notes</span>
+                      </div>
+                      <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
+                        <NotesPad
+                          value={notesDraft}
+                          onChange={setNotesDraft}
+                          disabled={!activeScene}
+                          ariaLabel="Scene notes"
+                          className="min-h-[220px] flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-900"
+                          style={{
+                            backgroundImage:
+                              "linear-gradient(to bottom, rgba(148, 163, 184, 0.35) 1px, transparent 1px)",
+                            backgroundSize: "100% 20px",
+                          }}
+                        />
+                        {!activeScene && (
+                          <span className="mt-2 text-[10px] text-slate-400">
+                            Select a scene to add notes.
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center justify-between gap-2 px-2.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200">
-                        <span className="truncate">
-                          {scene.name || `Scene ${index + 1}`}
-                        </span>
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                          {index + 1}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </aside>
           </div>
+          <div className="py-2" />
         </div>
       </div>
       {isMaterialModalOpen && (
@@ -491,14 +704,16 @@ export function VisualizerPage() {
               <div className="flex min-h-0 w-3/5 flex-col gap-3">
                 <div className="flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   <span>Preview</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsPreviewFullscreen(true)}
-                    className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-300 dark:hover:text-slate-100"
-                    disabled={!previewImageUrl}
-                  >
-                    Full screen
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalNotesOpen((prev) => !prev)}
+                      className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-300 dark:hover:text-slate-100"
+                      aria-pressed={isModalNotesOpen}
+                    >
+                      {isModalNotesOpen ? "Hide notes" : "Show notes"}
+                    </button>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {visibleDetections.length === 0 ? (
@@ -539,20 +754,34 @@ export function VisualizerPage() {
                   )}
                 </div>
                 {selectedRegionId && (
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                     {(() => {
                       const base = getBaseLabel(selectedRegionId)
-                      const segments = visibleDetections
-                        .filter((d) => getBaseLabel(d.label) === base)
-                        .map((d) => d.label)
+                      const segments = visibleDetections.filter(
+                        (d) => getBaseLabel(d.label) === base,
+                      )
                       if (segments.length === 0) return null
                       return (
-                        <span>
-                          Segments:{" "}
-                          <span className="font-medium text-slate-700 dark:text-slate-200">
-                            {segments.join(", ")}
-                          </span>
-                        </span>
+                        <>
+                          <span>Segments:</span>
+                          {segments.map((segment) => {
+                            const isActive = segment.label === selectedRegionId
+                            return (
+                              <button
+                                key={segment.label}
+                                type="button"
+                                onClick={() => setSelectedRegionId(segment.label)}
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                                  isActive
+                                    ? "bg-emerald-600 text-white"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                                }`}
+                              >
+                                {segment.label}
+                              </button>
+                            )
+                          })}
+                        </>
                       )
                     })()}
                   </div>
@@ -562,10 +791,20 @@ export function VisualizerPage() {
                     ref={previewContainerRef}
                     className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-900"
                   >
-                    {previewImageUrl ? (
-                      <div className="relative h-full w-full">
+                    {modalPreviewImageUrl ? (
+                      <div
+                        className="relative h-full w-full"
+                        onDoubleClick={() => setIsPreviewFullscreen(true)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            setIsPreviewFullscreen(true);
+                          }
+                        }}
+                      >
                         <img
-                          src={previewImageUrl}
+                          src={modalPreviewImageUrl}
                           alt="Room preview"
                           className="h-full w-full rounded-xl object-contain"
                           onLoad={(event) => {
@@ -576,23 +815,23 @@ export function VisualizerPage() {
                             });
                           }}
                         />
-                        {previewMaskUrls.length > 0 &&
-                          (previewMaterialColor || previewMaterialTexture) &&
-                          previewMaskUrls.map((maskUrl) => (
+                        {previewAppliedDetections.map(
+                          ({ detection, applied, maskUrl }) => (
                             <div
-                              key={maskUrl}
+                              key={`${detection.label}-${maskUrl}`}
                               className="pointer-events-none absolute inset-0 rounded-xl"
                               style={{
-                                backgroundColor: previewMaterialColor ?? undefined,
-                                backgroundSize: previewMaterialTexture
+                                backgroundColor: applied.color ?? undefined,
+                                backgroundSize: applied.assetUrl
                                   ? getTextureTileSize(
                                       previewSize.width,
                                       previewSize.height,
-                                      previewDetection?.bbox ?? null,
+                                      detection.bbox ?? null,
                                     )
                                   : undefined,
                                 backgroundRepeat: undefined,
                                 backgroundPosition: undefined,
+                                opacity: MATERIAL_OVERLAY_OPACITY,
                                 mixBlendMode: "multiply",
                                 WebkitMaskImage: `url(${maskUrl})`,
                                 maskImage: `url(${maskUrl})`,
@@ -604,25 +843,26 @@ export function VisualizerPage() {
                                 maskPosition: "center",
                               }}
                             >
-                              {previewMaterialTexture && (
+                              {applied.assetUrl && (
                                 <div
                                   className="absolute inset-0"
                                   style={{
-                                    backgroundImage: `url(${previewMaterialTexture})`,
+                                    backgroundImage: `url(${applied.assetUrl})`,
                                     backgroundSize: getTextureTileSize(
-                                      fullscreenSize.width,
-                                      fullscreenSize.height,
-                                      previewDetection?.bbox ?? null,
+                                      previewSize.width,
+                                      previewSize.height,
+                                      detection.bbox ?? null,
                                     ),
                                     backgroundRepeat: "repeat",
                                     backgroundPosition: "top left",
-                                    transform: `rotate(${previewMaterialRotation}deg)`,
+                                    transform: `rotate(${applied.rotation ?? 0}deg)`,
                                     transformOrigin: "center",
                                   }}
                                 />
                               )}
                             </div>
-                          ))}
+                          ),
+                        )}
                         {selectedBaseDetections.length > 0 && (
                           <div className="absolute inset-0">
                             {hoveredDetection?.maskUrl && (
@@ -703,16 +943,43 @@ export function VisualizerPage() {
                       </div>
                     )}
                   </div>
+                  {isModalNotesOpen && (
+                    <div className="hidden min-h-0 w-52 flex-col gap-2 rounded-2xl border border-slate-200 bg-white/80 p-3 text-[11px] text-slate-700 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-200 md:flex">
+                      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <span>Notes</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                          Notepad
+                        </span>
+                      </div>
+                      <NotesPad
+                        value={notesDraft}
+                        onChange={setNotesDraft}
+                        disabled={!activeScene}
+                        ariaLabel="Scene notes"
+                        className="min-h-[220px] flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-900"
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(to bottom, rgba(148, 163, 184, 0.35) 1px, transparent 1px)",
+                          backgroundSize: "100% 20px",
+                        }}
+                      />
+                      {!activeScene && (
+                        <span className="text-[10px] text-slate-400">
+                          Select a scene to add notes.
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex min-h-0 w-48 flex-col gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white/80 p-2 dark:border-slate-700 dark:bg-slate-950/60">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Scenes
                     </div>
-                    {scenes.length === 0 ? (
+                    {scenesForUi.length === 0 ? (
                       <div className="rounded-lg border border-dashed border-slate-200 px-2 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
                         No scenes
                       </div>
                     ) : (
-                      scenes.map((scene, index) => {
+                      scenesForUi.map((scene, index) => {
                         const isActive = scene.id === activeSceneId
                         return (
                           <button
@@ -764,7 +1031,7 @@ export function VisualizerPage() {
           </div>
         </div>
       )}
-      {isMaterialModalOpen && isPreviewFullscreen && (
+      {isPreviewFullscreen && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/70 p-4">
           <div
             className="absolute inset-0"
@@ -793,14 +1060,35 @@ export function VisualizerPage() {
                 </svg>
               </button>
             </div>
-            <div
-              ref={fullscreenPreviewRef}
-              className="flex min-h-0 flex-1 items-center justify-center bg-slate-50 p-4 dark:bg-slate-900"
-            >
-              {previewImageUrl ? (
-                <div className="relative h-full w-full">
+            <div className="relative min-h-0 flex-1">
+              {scenesForUi.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={goPrevScene}
+                    className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-2 text-slate-700 shadow-md transition-colors hover:bg-white dark:bg-slate-900/90 dark:text-slate-200"
+                    aria-label="Previous scene"
+                  >
+                    <ArrowLeftIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNextScene}
+                    className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-2 text-slate-700 shadow-md transition-colors hover:bg-white dark:bg-slate-900/90 dark:text-slate-200"
+                    aria-label="Next scene"
+                  >
+                    <ArrowRightIcon className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+              <div
+                ref={fullscreenPreviewRef}
+                className="flex min-h-0 h-full items-center justify-center bg-slate-50 p-4 dark:bg-slate-900"
+              >
+                {modalPreviewImageUrl ? (
+                  <div className="relative h-full w-full">
                   <img
-                    src={previewImageUrl}
+                    src={modalPreviewImageUrl}
                     alt="Room preview"
                     className="h-full w-full rounded-xl object-contain"
                     onLoad={(event) => {
@@ -811,23 +1099,23 @@ export function VisualizerPage() {
                       });
                     }}
                   />
-                  {previewMaskUrls.length > 0 &&
-                    (previewMaterialColor || previewMaterialTexture) &&
-                    previewMaskUrls.map((maskUrl) => (
+                  {previewAppliedDetections.map(
+                    ({ detection, applied, maskUrl }) => (
                       <div
-                        key={maskUrl}
+                        key={`${detection.label}-${maskUrl}`}
                         className="pointer-events-none absolute inset-0 rounded-xl"
                         style={{
-                          backgroundColor: previewMaterialColor ?? undefined,
-                          backgroundSize: previewMaterialTexture
+                          backgroundColor: applied.color ?? undefined,
+                          backgroundSize: applied.assetUrl
                             ? getTextureTileSize(
                                 fullscreenSize.width,
                                 fullscreenSize.height,
-                                previewDetection?.bbox ?? null,
+                                detection.bbox ?? null,
                               )
                             : undefined,
                           backgroundRepeat: undefined,
                           backgroundPosition: undefined,
+                          opacity: MATERIAL_OVERLAY_OPACITY,
                           mixBlendMode: "multiply",
                           WebkitMaskImage: `url(${maskUrl})`,
                           maskImage: `url(${maskUrl})`,
@@ -839,25 +1127,26 @@ export function VisualizerPage() {
                           maskPosition: "center",
                         }}
                       >
-                        {previewMaterialTexture && (
+                        {applied.assetUrl && (
                           <div
                             className="absolute inset-0"
                             style={{
-                              backgroundImage: `url(${previewMaterialTexture})`,
+                              backgroundImage: `url(${applied.assetUrl})`,
                               backgroundSize: getTextureTileSize(
-                                previewSize.width,
-                                previewSize.height,
-                                previewDetection?.bbox ?? null,
+                                fullscreenSize.width,
+                                fullscreenSize.height,
+                                detection.bbox ?? null,
                               ),
                               backgroundRepeat: "repeat",
                               backgroundPosition: "top left",
-                              transform: `rotate(${previewMaterialRotation}deg)`,
+                              transform: `rotate(${applied.rotation ?? 0}deg)`,
                               transformOrigin: "center",
                             }}
                           />
                         )}
                       </div>
-                    ))}
+                    ),
+                  )}
                   {selectedBaseDetections.length > 0 && (
                     <div className="absolute inset-0">
                       {hoveredDetection?.maskUrl && (
@@ -931,17 +1220,34 @@ export function VisualizerPage() {
                       })}
                     </div>
                   )}
-                </div>
-              ) : (
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  No preview available.
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    No preview available.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+function ArrowLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function ArrowRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
   );
 }
 
@@ -957,5 +1263,11 @@ const VISIBLE_LABELS = new Set([
 
 function getBaseLabel(label: string) {
   return label.replace(/\s+\d+$/, "");
+}
+
+function getSceneNotesKey(scenes: Scene[]) {
+  return scenes
+    .map((scene) => `${scene.id}:${scene.notes ?? ""}`)
+    .join("|");
 }
 

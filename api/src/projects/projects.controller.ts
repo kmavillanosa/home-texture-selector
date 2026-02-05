@@ -15,12 +15,12 @@ export class ProjectsController {
 	constructor(private readonly projectsService: ProjectsService) {}
 
 	@Post()
-	create(@Body() dto: CreateProjectDto) {
+	async create(@Body() dto: CreateProjectDto) {
 		return this.projectsService.create(dto)
 	}
 
 	@Get()
-	list() {
+	async list() {
 		return this.projectsService.list()
 	}
 
@@ -49,8 +49,8 @@ export class ProjectsController {
 	}
 
 	@Patch(':id')
-	update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
-		const project = this.projectsService.update(id, dto)
+	async update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
+		const project = await this.projectsService.update(id, dto)
 		if (!project) throw new NotFoundException('Project not found')
 		return project
 	}
