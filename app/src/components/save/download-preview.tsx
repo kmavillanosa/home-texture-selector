@@ -96,6 +96,7 @@ const normalizeAppliedMaterials = (
 					color: (match.metadata?.color as string) ?? '#e2e8f0',
 					assetUrl: match.assetUrl,
 					rotation: 0,
+						scale: 1,
 				}
 			}
 		}
@@ -108,17 +109,18 @@ const getTextureScale = (
 	textureImg: HTMLImageElement,
 	width: number,
 	height: number,
+	scale: number,
 ) => {
 	const bbox = detection.bbox
 	if (!bbox || !textureImg.naturalWidth || !textureImg.naturalHeight) return 1
 	const surfaceW = (bbox.width / 100) * width
 	const surfaceH = (bbox.height / 100) * height
 	const repeats = 4
-	const tileW = Math.max(surfaceW / repeats, 48)
-	const tileH = Math.max(surfaceH / repeats, 48)
+	const tileW = Math.max(surfaceW / repeats, 48) * scale
+	const tileH = Math.max(surfaceH / repeats, 48) * scale
 	const scaleX = tileW / textureImg.naturalWidth
 	const scaleY = tileH / textureImg.naturalHeight
-	return Math.min(scaleX, scaleY, 1)
+	return Math.min(scaleX, scaleY)
 }
 
 const buildSceneImage = async (
@@ -183,7 +185,13 @@ const buildSceneImage = async (
 
 		if (applied.assetUrl && textureMap.has(applied.assetUrl)) {
 			const textureImg = textureMap.get(applied.assetUrl)!
-			const textureScale = getTextureScale(d, textureImg, overlay.width, overlay.height)
+			const textureScale = getTextureScale(
+				d,
+				textureImg,
+				overlay.width,
+				overlay.height,
+				applied.scale ?? 1,
+			)
 			const rotationDeg = applied.rotation ?? 0
 			const rotationRad = (rotationDeg * Math.PI) / 180
 			octx.save()

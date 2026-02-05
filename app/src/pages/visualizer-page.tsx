@@ -237,12 +237,13 @@ export function VisualizerPage() {
     width: number,
     height: number,
     bbox?: { width: number; height: number } | null,
+    scale = 1,
   ) => {
     if (!width || !height || !bbox) return "160px 160px";
     const surfaceW = (bbox.width / 100) * width;
     const surfaceH = (bbox.height / 100) * height;
-    const tileW = Math.max(surfaceW / 4, 48);
-    const tileH = Math.max(surfaceH / 4, 48);
+    const tileW = Math.max(surfaceW / 4, 48) * scale;
+    const tileH = Math.max(surfaceH / 4, 48) * scale;
     return `${tileW.toFixed(0)}px ${tileH.toFixed(0)}px`;
   };
 
@@ -862,6 +863,7 @@ export function VisualizerPage() {
                                       previewSize.width,
                                       previewSize.height,
                                       detection.bbox ?? null,
+                                      applied.scale ?? 1,
                                     )
                                   : undefined,
                                 backgroundRepeat: undefined,
@@ -887,6 +889,7 @@ export function VisualizerPage() {
                                       previewSize.width,
                                       previewSize.height,
                                       detection.bbox ?? null,
+                                      applied.scale ?? 1,
                                     ),
                                     backgroundRepeat: "repeat",
                                     backgroundPosition: "top left",
@@ -1145,6 +1148,7 @@ export function VisualizerPage() {
                                 fullscreenSize.width,
                                 fullscreenSize.height,
                                 detection.bbox ?? null,
+                                applied.scale ?? 1,
                               )
                             : undefined,
                           backgroundRepeat: undefined,
@@ -1170,6 +1174,7 @@ export function VisualizerPage() {
                                 fullscreenSize.width,
                                 fullscreenSize.height,
                                 detection.bbox ?? null,
+                                applied.scale ?? 1,
                               ),
                               backgroundRepeat: "repeat",
                               backgroundPosition: "top left",

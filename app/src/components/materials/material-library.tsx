@@ -92,11 +92,13 @@ export function MaterialLibrary({
 	const setIsRendering = useVisualizerStore((s) => s.setIsRendering)
 	const applyMaterial = useVisualizerStore((s) => s.applyMaterial)
 	const setMaterialRotation = useVisualizerStore((s) => s.setMaterialRotation)
+	const setMaterialScale = useVisualizerStore((s) => s.setMaterialScale)
 	const clearMaterial = useVisualizerStore((s) => s.clearMaterial)
 	const applyToAllScenes = useVisualizerStore((s) => s.applyToAllScenes)
 	const setApplyToAllScenes = useVisualizerStore((s) => s.setApplyToAllScenes)
 	const appliedMaterials = useVisualizerStore((s) => s.appliedMaterials)
 	const [textureRotation, setTextureRotation] = useState(0)
+	const [textureScale, setTextureScale] = useState(1)
 	const selectedDetection =
 		detectionResult?.detections.find((d) => d.label === selectedRegionId) ?? null
 	const canApply = Boolean(selectedDetection?.maskUrl)
@@ -142,15 +144,18 @@ export function MaterialLibrary({
 		if (!selectedRegionId) return
 		if (selectedApplied?.assetUrl) {
 			setTextureRotation(selectedApplied.rotation ?? 0)
+			setTextureScale(selectedApplied.scale ?? 1)
 			return
 		}
 		if (selectedMaterial?.assetUrl) {
 			setTextureRotation(0)
+			setTextureScale(1)
 		}
 	}, [
 		selectedRegionId,
 		selectedApplied?.assetUrl,
 		selectedApplied?.rotation,
+		selectedApplied?.scale,
 		selectedMaterial?.id,
 	])
 
@@ -215,9 +220,11 @@ export function MaterialLibrary({
 			const base = getBaseLabel(regionId)
 			detectionResult?.detections
 				.filter((d) => getBaseLabel(d.label) === base)
-				.forEach((d) => applyMaterial(d.label, material, textureRotation))
+				.forEach((d) =>
+					applyMaterial(d.label, material, textureRotation, textureScale),
+				)
 		} else {
-			applyMaterial(regionId, material, textureRotation)
+			applyMaterial(regionId, material, textureRotation, textureScale)
 		}
 		setSelectedRegionId(regionId)
 		// Photorealistic render (local GPU diffusion)
@@ -385,6 +392,33 @@ export function MaterialLibrary({
 									return
 								}
 								setMaterialRotation(selectedRegionId, next)
+							}}
+							className="mt-2 w-full accent-emerald-600"
+						/>
+						<div className="mt-3 flex items-center justify-between gap-2">
+							<span>Texture zoom</span>
+							<span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+								{Math.round(textureScale * 100)}%
+							</span>
+						</div>
+						<input
+							type="range"
+							min={0.5}
+							max={2}
+							step={0.05}
+							value={textureScale}
+							onChange={(event) => {
+								const next = Number(event.target.value)
+								setTextureScale(next)
+								if (!selectedRegionId) return
+								if (applyScope === 'all') {
+									const base = getBaseLabel(selectedRegionId)
+									detectionResult?.detections
+										.filter((d) => getBaseLabel(d.label) === base)
+										.forEach((d) => setMaterialScale(d.label, next))
+									return
+								}
+								setMaterialScale(selectedRegionId, next)
 							}}
 							className="mt-2 w-full accent-emerald-600"
 						/>

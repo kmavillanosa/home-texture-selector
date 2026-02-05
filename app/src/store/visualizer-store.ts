@@ -32,8 +32,14 @@ interface VisualizerState {
 	setApplyToAllScenes: (enabled: boolean) => void
 	setHideHeader: (hide: boolean) => void
 	setNotesDraft: (notes: string) => void
-	applyMaterial: (regionId: string, material: Material, rotation?: number) => void
+	applyMaterial: (
+		regionId: string,
+		material: Material,
+		rotation?: number,
+		scale?: number,
+	) => void
 	setMaterialRotation: (regionId: string, rotation: number) => void
+	setMaterialScale: (regionId: string, scale: number) => void
 	clearMaterial: (regionId: string) => void
 	clearAllMaterials: () => void
 	resetView: () => void
@@ -69,7 +75,7 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
 	setApplyToAllScenes: (applyToAllScenes) => set({ applyToAllScenes }),
 	setHideHeader: (hideHeader) => set({ hideHeader }),
 	setNotesDraft: (notesDraft) => set({ notesDraft }),
-	applyMaterial: (regionId, material, rotation) =>
+	applyMaterial: (regionId, material, rotation, scale) =>
 		set((state) => ({
 			appliedMaterials: {
 				...state.appliedMaterials,
@@ -78,6 +84,7 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
 					color: (material.metadata?.color as string) ?? '#e2e8f0',
 					assetUrl: material.assetUrl,
 					rotation: rotation ?? 0,
+					scale: scale ?? 1,
 				},
 			},
 		})),
@@ -89,6 +96,17 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
 				appliedMaterials: {
 					...state.appliedMaterials,
 					[regionId]: { ...current, rotation },
+				},
+			}
+		}),
+	setMaterialScale: (regionId, scale) =>
+		set((state) => {
+			const current = state.appliedMaterials[regionId]
+			if (!current) return state
+			return {
+				appliedMaterials: {
+					...state.appliedMaterials,
+					[regionId]: { ...current, scale },
 				},
 			}
 		}),

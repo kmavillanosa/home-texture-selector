@@ -132,6 +132,20 @@ function getBaseLabel(label: string) {
 
 const defaultMetrics = { dw: 0, dh: 0, fit: 1, baseX: 0, baseY: 0 }
 
+const getTextureTileSize = (
+	width: number,
+	height: number,
+	bbox?: { width: number; height: number } | null,
+	scale = 1,
+) => {
+	if (!width || !height || !bbox) return { tileW: 160, tileH: 160 }
+	const surfaceW = (bbox.width / 100) * width
+	const surfaceH = (bbox.height / 100) * height
+	const tileW = Math.max(surfaceW / 4, 48) * scale
+	const tileH = Math.max(surfaceH / 4, 48) * scale
+	return { tileW, tileH }
+}
+
 const drawFallbackOverlay = (
 	ctx: CanvasRenderingContext2D,
 	detection: Detection,
@@ -269,7 +283,6 @@ export function RoomCanvas({
 
 	const roomImageUrl = useVisualizerStore((s) => s.roomImageUrl)
 	const selectedRegionId = useVisualizerStore((s) => s.selectedRegionId)
-	const renderedImageUrl = useVisualizerStore((s) => s.renderedImageUrl)
 	const detectionResult = useVisualizerStore((s) => s.detectionResult)
 	const appliedMaterials = useVisualizerStore((s) => s.appliedMaterials)
 	const setSelectedRegionId = useVisualizerStore((s) => s.setSelectedRegionId)
@@ -285,7 +298,6 @@ export function RoomCanvas({
 
 	const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null)
 	const loadedImageRef = useRef<HTMLImageElement | null>(null)
-	const [renderedReadyUrl, setRenderedReadyUrl] = useState<string | null>(null)
 	const hasAutoFittedRef = useRef(false)
 	const [croppedImages, setCroppedImages] = useState<
 		Record<string, HTMLImageElement>
@@ -313,28 +325,8 @@ export function RoomCanvas({
 		loadedImageRef.current = loadedImage
 	}, [loadedImage])
 
-	const displayImageUrl = renderedReadyUrl ?? roomImageUrl
-	const shouldRenderApplied = !renderedReadyUrl
-
-	useEffect(() => {
-		if (!renderedImageUrl) {
-			setRenderedReadyUrl(null)
-			return
-		}
-		let isActive = true
-		const img = new Image()
-		img.crossOrigin = 'anonymous'
-		img.onload = () => {
-			if (isActive) setRenderedReadyUrl(renderedImageUrl)
-		}
-		img.onerror = () => {
-			if (isActive) setRenderedReadyUrl(null)
-		}
-		img.src = renderedImageUrl
-		return () => {
-			isActive = false
-		}
-	}, [renderedImageUrl])
+	const displayImageUrl = roomImageUrl
+	const shouldRenderApplied = true
 
 	useEffect(() => {
 		if (!displayImageUrl) {
@@ -508,12 +500,14 @@ export function RoomCanvas({
 			textureUrl: string,
 			maskImg: HTMLImageElement,
 			textureImg: HTMLImageElement,
-			_roomImg: HTMLImageElement | null,
 			detection: Detection,
 			rotationDeg: number,
+			targetW: number,
+			targetH: number,
+			scale: number,
 		) => {
 			const illumKey = illuminationImage?.src ?? ''
-			const key = `${maskUrl}::tex::${textureUrl}::${rotationDeg}::silhouette::${illumKey}`
+			const key = `${maskUrl}::tex::${textureUrl}::${rotationDeg}::${scale}::${targetW}::${targetH}::silhouette::${illumKey}`
 			const existing = maskOverlayRef.current[key]
 			if (existing) return existing
 			const canvas = document.createElement('canvas')
@@ -525,17 +519,19 @@ export function RoomCanvas({
 			const h = canvas.height
 			// Draw texture silhouette (subtle overlay)
 			ctx.globalCompositeOperation = 'source-over'
-			ctx.globalAlpha = TEXTURE_SILHOUETTE_ALPHA
-			const surfaceW = (detection.bbox.width / 100) * w
-			const surfaceH = (detection.bbox.height / 100) * h
-			const repeats = 4
-			// Calculate tile size matching modal preview approach (same as getTextureTileSize)
-			const tileW = Math.max(surfaceW / repeats, 48)
-			const tileH = Math.max(surfaceH / repeats, 48)
-			// Use the smaller scale to maintain aspect ratio and match modal quality
-			const scaleX = tileW / textureImg.naturalWidth
-			const scaleY = tileH / textureImg.naturalHeight
-			const textureScale = Math.min(scaleX, scaleY, 1.0)
+			ctx.globalAlpha = 1
+			const { tileW, tileH } = getTextureTileSize(
+				targetW,
+				targetH,
+				detection.bbox ?? null,
+				scale,
+			)
+			const maskScaleX = w / targetW
+			const maskScaleY = h / targetH
+			const tileWCanvas = tileW * maskScaleX
+			const tileHCanvas = tileH * maskScaleY
+			const scaleX = tileWCanvas / textureImg.naturalWidth
+			const scaleY = tileHCanvas / textureImg.naturalHeight
 
 			// Build a full-canvas texture fill (scaled + rotated), then optionally warp for floors
 			const textureCanvas = document.createElement('canvas')
@@ -545,30 +541,24 @@ export function RoomCanvas({
 			if (!tctx) return canvas
 			const pattern = tctx.createPattern(textureImg, 'repeat')
 			const rotationRad = (rotationDeg * Math.PI) / 180
-			if (pattern && 'setTransform' in pattern) {
-				pattern.setTransform(
-					new DOMMatrix()
-						.scale(textureScale)
-						.rotate(rotationDeg)
-				)
-			}
 			tctx.save()
-			if (!('setTransform' in (pattern as unknown as { setTransform?: unknown })) && pattern) {
-				// Fallback: scale context if pattern.setTransform is unavailable
+			if (pattern) {
 				tctx.translate(w / 2, h / 2)
 				tctx.rotate(rotationRad)
-				tctx.scale(textureScale, textureScale)
+				tctx.scale(scaleX, scaleY)
 				tctx.fillStyle = pattern
-				tctx.fillRect(-w / (2 * textureScale), -h / (2 * textureScale), w / textureScale, h / textureScale)
-			} else if (pattern) {
-				tctx.fillStyle = pattern
-				tctx.fillRect(0, 0, w, h)
+				tctx.fillRect(
+					-w / scaleX,
+					-h / scaleY,
+					(2 * w) / scaleX,
+					(2 * h) / scaleY,
+				)
 			}
 			tctx.restore()
 
 			// Default: straight texture fill
 			ctx.drawImage(textureCanvas, 0, 0)
-			if (illuminationImage) {
+			if (illuminationImage && ILLUM_SILHOUETTE_ALPHA > 0) {
 				ctx.globalCompositeOperation = 'multiply'
 				ctx.globalAlpha = ILLUM_SILHOUETTE_ALPHA
 				ctx.drawImage(illuminationImage, 0, 0, w, h)
@@ -730,9 +720,11 @@ export function RoomCanvas({
 										applied.assetUrl,
 										maskImages[d.maskUrl],
 										textureImages[applied.assetUrl],
-										loadedImage,
 										d,
 										applied.rotation ?? 0,
+										dw,
+										dh,
+										applied.scale ?? 1,
 									)
 								bctx.globalCompositeOperation = 'multiply'
 								bctx.globalAlpha = TEXTURE_SILHOUETTE_ALPHA

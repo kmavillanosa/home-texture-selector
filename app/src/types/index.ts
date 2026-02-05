@@ -56,6 +56,7 @@ export interface AppliedMaterialSnapshot {
 	color: string
 	assetUrl: string
 	rotation: number
+	scale: number
 }
 
 export interface Scene {
