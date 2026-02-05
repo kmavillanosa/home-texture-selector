@@ -89,6 +89,8 @@ export function MaterialLibrary() {
 	const applyMaterial = useVisualizerStore((s) => s.applyMaterial)
 	const setMaterialRotation = useVisualizerStore((s) => s.setMaterialRotation)
 	const clearMaterial = useVisualizerStore((s) => s.clearMaterial)
+	const applyToAllScenes = useVisualizerStore((s) => s.applyToAllScenes)
+	const setApplyToAllScenes = useVisualizerStore((s) => s.setApplyToAllScenes)
 	const appliedMaterials = useVisualizerStore((s) => s.appliedMaterials)
 	const [textureRotation, setTextureRotation] = useState(0)
 	const selectedDetection =
@@ -311,7 +313,7 @@ export function MaterialLibrary() {
 					))}
 				</div>
 				{selectedRegionId && (
-					<div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-800/80">
+					<div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-800/80">
 						<label className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400">
 							<span>Apply to</span>
 							<select
@@ -324,6 +326,15 @@ export function MaterialLibrary() {
 								<option value="segment">{segmentScopeLabel}</option>
 								<option value="all">{allScopeLabel}</option>
 							</select>
+						</label>
+						<label className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+							<input
+								type="checkbox"
+								checked={applyToAllScenes}
+								onChange={(event) => setApplyToAllScenes(event.target.checked)}
+								className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/40 dark:border-slate-600"
+							/>
+							<span>Apply to all scenes</span>
 						</label>
 						<button
 							type="button"
@@ -381,17 +392,19 @@ export function MaterialLibrary() {
 				</div>
 			)}
 			</div>
-			<div className="min-h-0 flex-1 overflow-y-auto p-2.5">
-				<div className="grid grid-cols-3 gap-2">
-					{materials.map((m) => (
-						<MaterialCard
-							key={m.id}
-							material={m}
-							onSelect={handleMaterialSelect}
-						/>
-					))}
+			{materials.length > 0 && (
+				<div className="min-h-0 flex-1 overflow-y-auto p-2.5">
+					<div className="grid grid-cols-3 gap-2">
+						{materials.map((m) => (
+							<MaterialCard
+								key={m.id}
+								material={m}
+								onSelect={handleMaterialSelect}
+							/>
+						))}
+					</div>
 				</div>
-			</div>
+			)}
 		</div>
 	)
 }

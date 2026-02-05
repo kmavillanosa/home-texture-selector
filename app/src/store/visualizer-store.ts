@@ -17,6 +17,7 @@ interface VisualizerState {
 	appliedMaterials: Record<string, AppliedMaterial>
 	renderedImageUrl: string | null
 	isRendering: boolean
+	applyToAllScenes: boolean
 	hideHeader: boolean
 	notesDraft: string
 	setRoomImage: (url: string | null) => void
@@ -28,6 +29,7 @@ interface VisualizerState {
 	setRenderedImageUrl: (url: string | null) => void
 	setIsRendering: (isRendering: boolean) => void
 	setAppliedMaterials: (materials: Record<string, AppliedMaterial>) => void
+	setApplyToAllScenes: (enabled: boolean) => void
 	setHideHeader: (hide: boolean) => void
 	setNotesDraft: (notes: string) => void
 	applyMaterial: (regionId: string, material: Material, rotation?: number) => void
@@ -48,6 +50,7 @@ const initialState = {
 	appliedMaterials: {} as Record<string, AppliedMaterial>,
 	renderedImageUrl: null as string | null,
 	isRendering: false,
+	applyToAllScenes: false,
 	hideHeader: false,
 	notesDraft: '',
 }
@@ -63,6 +66,7 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
 	setRenderedImageUrl: (renderedImageUrl) => set({ renderedImageUrl }),
 	setIsRendering: (isRendering) => set({ isRendering }),
 	setAppliedMaterials: (appliedMaterials) => set({ appliedMaterials }),
+	setApplyToAllScenes: (applyToAllScenes) => set({ applyToAllScenes }),
 	setHideHeader: (hideHeader) => set({ hideHeader }),
 	setNotesDraft: (notesDraft) => set({ notesDraft }),
 	applyMaterial: (regionId, material, rotation) =>

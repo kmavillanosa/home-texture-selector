@@ -55,6 +55,14 @@ const areAppliedMaterialsEqual = (
     );
   });
 
+const getBaseMaterials = (applied: Record<string, AppliedMaterial>) => {
+  const baseMaterials = new Map<string, AppliedMaterial>();
+  Object.entries(applied).forEach(([label, material]) => {
+    baseMaterials.set(getBaseLabel(label), material);
+  });
+  return baseMaterials;
+};
+
 export function VisualizerPage() {
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get("project");
@@ -70,6 +78,7 @@ export function VisualizerPage() {
   const appliedMaterials = useVisualizerStore((s) => s.appliedMaterials);
   const roomImageUrl = useVisualizerStore((s) => s.roomImageUrl);
   const renderedImageUrl = useVisualizerStore((s) => s.renderedImageUrl);
+  const applyToAllScenes = useVisualizerStore((s) => s.applyToAllScenes);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
@@ -399,6 +408,32 @@ export function VisualizerPage() {
   useEffect(() => {
     if (!activeSceneId) return;
     setScenes((prev) => {
+      if (prev.length === 0) return prev;
+      const baseMaterials = getBaseMaterials(appliedMaterials);
+      const buildAppliedForScene = (scene: Scene) => {
+        const nextApplied: Record<string, AppliedMaterial> = {};
+        scene.detectionResult?.detections.forEach((d) => {
+          const material = baseMaterials.get(getBaseLabel(d.label));
+          if (material) nextApplied[d.label] = material;
+        });
+        return nextApplied;
+      };
+      if (applyToAllScenes) {
+        let changed = false;
+        const next = prev.map((scene) => {
+          const current = resolveSceneApplied(
+            scene.appliedMaterials,
+            appliedMaterials,
+          );
+          const nextApplied = buildAppliedForScene(scene);
+          if (!areAppliedMaterialsEqual(current, nextApplied)) {
+            changed = true;
+            return { ...scene, appliedMaterials: nextApplied };
+          }
+          return scene;
+        });
+        return changed ? next : prev;
+      }
       const sceneIndex = prev.findIndex((scene) => scene.id === activeSceneId);
       if (sceneIndex < 0) return prev;
       const current = resolveSceneApplied(
@@ -415,7 +450,7 @@ export function VisualizerPage() {
       };
       return next;
     });
-  }, [activeSceneId, appliedMaterials]);
+  }, [activeSceneId, appliedMaterials, applyToAllScenes]);
 
   useEffect(() => {
     if (!isMaterialModalOpen) return;

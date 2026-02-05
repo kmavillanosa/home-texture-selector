@@ -19,8 +19,8 @@ const SELECTED_GROUP_STROKE = 'rgba(14, 116, 144, 0.85)'
 const SELECTED_GROUP_DASH = [6, 4]
 const COLOR_APPLY_ALPHA = 0.82
 const TEXTURE_SILHOUETTE_ALPHA = 0.82
-const ILLUM_SILHOUETTE_ALPHA = 0.5
-const TEXTURE_UNDERCOAT_ALPHA = 0.35
+const ILLUM_SILHOUETTE_ALPHA = 0
+const TEXTURE_UNDERCOAT_ALPHA = 0
 const VISIBLE_LABELS = new Set([
 	'Wall',
 	'Floor',
@@ -706,23 +706,25 @@ export function RoomCanvas({
 							if (!applied) return
 							if (d.maskUrl && maskImages[d.maskUrl]) {
 								if (applied.assetUrl && textureImages[applied.assetUrl]) {
-									const whiteBase = getWhiteMaskOverlay(
-										d.maskUrl,
-										maskImages[d.maskUrl],
-									)
-									bctx.globalCompositeOperation = 'source-over'
-									bctx.globalAlpha = 1
-									bctx.drawImage(
-										whiteBase,
-										0,
-										0,
-										whiteBase.width,
-										whiteBase.height,
-										0,
-										0,
-										dw,
-										dh,
-									)
+									if (TEXTURE_UNDERCOAT_ALPHA > 0) {
+										const whiteBase = getWhiteMaskOverlay(
+											d.maskUrl,
+											maskImages[d.maskUrl],
+										)
+										bctx.globalCompositeOperation = 'source-over'
+										bctx.globalAlpha = 1
+										bctx.drawImage(
+											whiteBase,
+											0,
+											0,
+											whiteBase.width,
+											whiteBase.height,
+											0,
+											0,
+											dw,
+											dh,
+										)
+									}
 									const overlay = getTexturedMaskOverlay(
 										d.maskUrl,
 										applied.assetUrl,
@@ -749,23 +751,25 @@ export function RoomCanvas({
 								bctx.globalCompositeOperation = 'source-over'
 									return
 								}
-								const whiteBase = getWhiteMaskOverlay(
-									d.maskUrl,
-									maskImages[d.maskUrl],
-								)
-								bctx.globalCompositeOperation = 'source-over'
-								bctx.globalAlpha = 1
-								bctx.drawImage(
-									whiteBase,
-									0,
-									0,
-									whiteBase.width,
-									whiteBase.height,
-									0,
-									0,
-									dw,
-									dh,
-								)
+								if (TEXTURE_UNDERCOAT_ALPHA > 0) {
+									const whiteBase = getWhiteMaskOverlay(
+										d.maskUrl,
+										maskImages[d.maskUrl],
+									)
+									bctx.globalCompositeOperation = 'source-over'
+									bctx.globalAlpha = 1
+									bctx.drawImage(
+										whiteBase,
+										0,
+										0,
+										whiteBase.width,
+										whiteBase.height,
+										0,
+										0,
+										dw,
+										dh,
+									)
+								}
 								const overlay = getTintedMaskOverlay(
 									d.maskUrl,
 									applied.color,
