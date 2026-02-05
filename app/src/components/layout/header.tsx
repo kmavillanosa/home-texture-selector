@@ -11,10 +11,10 @@ export function Header() {
 				>
 					<img
 						src={logoUrl}
-						alt="Anyo Haus Studio logo"
+						alt="AnyoHaus logo"
 						className="h-6 w-6 object-contain"
 					/>
-					<span>Anyo Haus Studio</span>
+					<span>AnyoHaus</span>
 				</Link>
 				<div className="flex items-center gap-3">
 					<Link

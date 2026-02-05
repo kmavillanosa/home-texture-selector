@@ -179,7 +179,7 @@ export function HomePage() {
 			</div>
 			<footer className="mt-16 w-full border-t border-slate-200/70 pt-8 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
 				<div className="mx-auto flex w-full max-w-3xl flex-col items-center justify-between gap-4 sm:flex-row">
-					<span>© 2026 Anyo Haus Studio. All rights reserved.</span>
+					<span>© 2026 AnyoHaus. All rights reserved.</span>
 					<div className="flex items-center gap-4">
 						<Link to="/login" className="transition-colors hover:text-slate-700 dark:hover:text-slate-200">
 							Login

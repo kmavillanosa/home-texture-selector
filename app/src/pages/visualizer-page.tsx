@@ -503,7 +503,7 @@ export function VisualizerPage() {
           )}
           <div className="ml-auto flex items-center gap-3">
             <Toolbar />
-            <DownloadPreview />
+            <DownloadPreview scenes={scenesForUi} />
             <SaveShare />
           </div>
         </div>
@@ -736,7 +736,7 @@ export function VisualizerPage() {
               </button>
             </div>
             <div className="flex min-h-0 flex-1 flex-row gap-4 overflow-hidden p-3">
-              <div className="flex min-h-0 w-3/5 flex-col gap-3">
+              <div className="flex min-h-0 flex-1 flex-col gap-3">
                 <div className="flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   <span>Preview</span>
                   <div className="flex items-center gap-2">
@@ -1005,7 +1005,7 @@ export function VisualizerPage() {
                       )}
                     </div>
                   )}
-                  <div className="flex min-h-0 w-48 flex-col gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white/80 p-2 dark:border-slate-700 dark:bg-slate-950/60">
+                  <div className="flex min-h-0 w-56 flex-col gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-white/80 p-2 dark:border-slate-700 dark:bg-slate-950/60">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Scenes
                     </div>
@@ -1021,36 +1021,35 @@ export function VisualizerPage() {
                             key={scene.id}
                             type="button"
                             onClick={() => setActiveSceneId(scene.id)}
-                            className={`group relative flex flex-col overflow-hidden rounded-xl border text-left text-[11px] font-medium transition-all ${
+                            className={`flex items-center gap-2 rounded-xl border px-2 py-2 text-left text-[11px] font-medium transition-all ${
                               isActive
                                 ? "border-emerald-500 bg-emerald-50/70 text-emerald-800"
                                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
                             }`}
                           >
-                            <div className="relative h-[180px] w-full overflow-hidden bg-slate-100">
+                            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">
                               {scene.roomImageUrl ? (
                                 <img
                                   src={scene.roomImageUrl}
                                   alt={scene.name}
-                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                                  className="h-full w-full object-cover"
                                 />
                               ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
+                                <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">
                                   No preview
                                 </div>
                               )}
-                              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-slate-950/70 via-slate-950/20 to-transparent" />
-                              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
-                                <span className="truncate">
-                                  {scene.name || `Scene ${index + 1}`}
-                                </span>
-                                <span>{index + 1}</span>
+                              <span className="absolute bottom-1 right-1 rounded-full bg-slate-900/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                                {index + 1}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[11px] font-semibold">
+                                {scene.name || `Scene ${index + 1}`}
                               </div>
-                              {isActive && (
-                                <span className="absolute right-2 top-2 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
-                                  Active
-                                </span>
-                              )}
+                              <div className="text-[10px] text-slate-400">
+                                {isActive ? "Active" : "Tap to preview"}
+                              </div>
                             </div>
                           </button>
                         )
@@ -1059,8 +1058,8 @@ export function VisualizerPage() {
                   </div>
                 </div>
               </div>
-              <div className="min-h-0 w-2/5 overflow-y-auto">
-                <MaterialLibrary />
+              <div className="min-h-0 w-80 shrink-0 overflow-y-auto">
+                <MaterialLibrary gridClassName="grid-cols-2" />
               </div>
             </div>
           </div>

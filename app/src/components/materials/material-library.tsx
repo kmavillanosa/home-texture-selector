@@ -70,7 +70,11 @@ const pickRegionIdForCategory = (
 	return detections[0]?.id ?? null
 }
 
-export function MaterialLibrary() {
+export function MaterialLibrary({
+	gridClassName,
+}: {
+	gridClassName?: string
+}) {
 	const [allMaterials, setAllMaterials] = useState<Material[]>([])
 	const [category, setCategory] = useState('')
 	const [search, setSearch] = useState('')
@@ -394,7 +398,7 @@ export function MaterialLibrary() {
 			</div>
 			{materials.length > 0 && (
 				<div className="min-h-0 flex-1 overflow-y-auto p-2.5">
-					<div className="grid grid-cols-3 gap-2">
+					<div className={`grid gap-2 ${gridClassName ?? 'grid-cols-3'}`}>
 						{materials.map((m) => (
 							<MaterialCard
 								key={m.id}
