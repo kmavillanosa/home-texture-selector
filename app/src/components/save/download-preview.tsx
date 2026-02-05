@@ -7,6 +7,11 @@ import type { AppliedMaterial } from '../../store/visualizer-store'
 
 const COLOR_APPLY_ALPHA = 0.9
 const REPORT_TITLE = 'AnyoHaus Materials Report'
+const REPORT_ACCENT = [16, 185, 129] as const
+const REPORT_TEXT = [15, 23, 42] as const
+const REPORT_MUTED = [100, 116, 139] as const
+const REPORT_BORDER = [226, 232, 240] as const
+const REPORT_HEADER_BG = [248, 250, 252] as const
 
 const hexToRgba = (hex: string, alpha: number) => {
 	const cleaned = hex.replace('#', '').trim()
@@ -32,6 +37,44 @@ const loadImage = (url: string) =>
 		img.onload = () => resolve(img)
 		img.onerror = reject
 		img.src = url
+	})
+
+const hexToRgb = (hex: string) => {
+	const cleaned = hex.replace('#', '').trim()
+	const value =
+		cleaned.length === 3
+			? cleaned
+					.split('')
+					.map((c) => c + c)
+					.join('')
+			: cleaned
+	const r = Number.parseInt(value.slice(0, 2), 16)
+	const g = Number.parseInt(value.slice(2, 4), 16)
+	const b = Number.parseInt(value.slice(4, 6), 16)
+	return [r, g, b] as const
+}
+
+const buildTextureThumbnail = (img: HTMLImageElement, size = 96) => {
+	const canvas = document.createElement('canvas')
+	canvas.width = size
+	canvas.height = size
+	const ctx = canvas.getContext('2d')
+	if (!ctx) return canvas.toDataURL('image/png')
+	const pattern = ctx.createPattern(img, 'repeat')
+	if (pattern) {
+		ctx.fillStyle = pattern
+		ctx.fillRect(0, 0, size, size)
+	} else {
+		ctx.drawImage(img, 0, 0, size, size)
+	}
+	return canvas.toDataURL('image/png')
+}
+
+const formatReportDate = () =>
+	new Date().toLocaleDateString('en-US', {
+		month: 'short',
+		day: 'numeric',
+		year: 'numeric',
 	})
 
 const normalizeAppliedMaterials = (
@@ -266,34 +309,94 @@ export function DownloadPreview({ scenes }: { scenes: Scene[] }) {
 		const pageWidth = doc.internal.pageSize.getWidth()
 		const pageHeight = doc.internal.pageSize.getHeight()
 		const margin = 48
-		const maxImageHeight = pageHeight * 0.45
+		const contentWidth = pageWidth - margin * 2
+		const headerHeight = 88
+		const imageCardHeight = pageHeight * 0.42
+		const cardPadding = 12
+		const cardGap = 16
+		const cardHeight = 72
+		const thumbSize = 48
+		const generatedOn = formatReportDate()
+
+		const setTextColor = (color: readonly number[]) => {
+			doc.setTextColor(color[0], color[1], color[2])
+		}
+
+		const setFillColor = (color: readonly number[]) => {
+			doc.setFillColor(color[0], color[1], color[2])
+		}
+
+		const setDrawColor = (color: readonly number[]) => {
+			doc.setDrawColor(color[0], color[1], color[2])
+		}
+
+		const drawHeader = (sceneName: string) => {
+			setFillColor(REPORT_HEADER_BG)
+			doc.rect(0, 0, pageWidth, headerHeight, 'F')
+			setFillColor(REPORT_ACCENT)
+			doc.rect(0, 0, 6, headerHeight, 'F')
+
+			setTextColor(REPORT_TEXT)
+			doc.setFont('times', 'bold')
+			doc.setFontSize(22)
+			doc.text(REPORT_TITLE, margin, 36)
+
+			doc.setFont('helvetica', 'normal')
+			doc.setFontSize(12)
+			doc.text(sceneName, margin, 58)
+
+			setTextColor(REPORT_MUTED)
+			doc.setFontSize(10)
+			doc.text(`Generated ${generatedOn}`, margin, 74)
+		}
+
+		const drawSectionTitle = (title: string, y: number) => {
+			setTextColor(REPORT_TEXT)
+			doc.setFont('helvetica', 'bold')
+			doc.setFontSize(12)
+			doc.text(title, margin, y)
+		}
+
+		const getMaterialLabel = (material?: AppliedMaterial) => {
+			if (!material) return 'None selected'
+			const match = materialsById.get(material.materialId)
+			if (material.assetUrl) {
+				return (
+					match?.name ??
+					material.assetUrl.split('/').pop()?.split('?')[0] ??
+					'Texture'
+				)
+			}
+			const name = match?.name ?? 'Color'
+			return `${name} • ${material.color}`
+		}
 
 		for (let i = 0; i < scenes.length; i += 1) {
 			const scene = scenes[i]
 			if (i > 0) doc.addPage()
 
-			doc.setFont('helvetica', 'bold')
-			doc.setFontSize(18)
-			doc.text(REPORT_TITLE, margin, margin)
-			doc.setFontSize(12)
-			doc.text(
-				scene.name || `Scene ${i + 1}`,
-				margin,
-				margin + 24,
-			)
+			drawHeader(scene.name || `Scene ${i + 1}`)
 
 			const imageData = await buildSceneImage(scene, materialsById)
+			const imageCardY = headerHeight + 20
+			const imageCardW = contentWidth
+			const imageCardX = margin
+
+			setFillColor([255, 255, 255])
+			setDrawColor(REPORT_BORDER)
+			doc.rect(imageCardX, imageCardY, imageCardW, imageCardHeight, 'FD')
+
+			const imageMaxW = imageCardW - cardPadding * 2
+			const imageMaxH = imageCardHeight - cardPadding * 2
 			const scale = Math.min(
-				(pageWidth - margin * 2) / imageData.width,
-				maxImageHeight / imageData.height,
+				imageMaxW / imageData.width,
+				imageMaxH / imageData.height,
 			)
 			const imgW = imageData.width * scale
 			const imgH = imageData.height * scale
-			const imgX = (pageWidth - imgW) / 2
-			const imgY = margin + 48
+			const imgX = imageCardX + (imageCardW - imgW) / 2
+			const imgY = imageCardY + (imageCardHeight - imgH) / 2
 			doc.addImage(imageData.dataUrl, 'JPEG', imgX, imgY, imgW, imgH)
-			doc.setDrawColor(226, 232, 240)
-			doc.rect(imgX, imgY, imgW, imgH)
 
 			const applied = normalizeAppliedMaterials(
 				scene.appliedMaterials,
@@ -310,49 +413,130 @@ export function DownloadPreview({ scenes }: { scenes: Scene[] }) {
 				}
 			})
 
-			const lines: string[] = []
-			surfaceMap.forEach((material, base) => {
-				if (!material) {
-					lines.push(`${base}: None`)
-					return
-				}
-				const match = materialsById.get(material.materialId)
-				if (material.assetUrl) {
-					const name =
-						match?.name ??
-						material.assetUrl.split('/').pop()?.split('?')[0] ??
-						'Texture'
-					lines.push(`${base}: ${name}`)
-					return
-				}
-				const name = match?.name ?? 'Color'
-				lines.push(`${base}: ${name} (${material.color})`)
+			const textureUrls = [
+				...new Set(
+					[...surfaceMap.values()]
+						.map((material) => material?.assetUrl)
+						.filter(Boolean),
+				),
+			] as string[]
+			const textureImages = await Promise.allSettled(
+				textureUrls.map(loadImage),
+			)
+			const texturePreviewMap = new Map<string, string>()
+			textureImages.forEach((result, index) => {
+				if (result.status !== 'fulfilled') return
+				const preview = buildTextureThumbnail(result.value)
+				texturePreviewMap.set(textureUrls[index], preview)
 			})
 
-			doc.setFont('helvetica', 'bold')
-			doc.setFontSize(12)
-			let cursorY = imgY + imgH + 28
-			doc.text('Materials used', margin, cursorY)
-			doc.setFont('helvetica', 'normal')
-			doc.setFontSize(11)
-			cursorY += 14
-			lines.forEach((line) => {
-				doc.text(line, margin, cursorY)
-				cursorY += 14
-			})
+			let cursorY = imageCardY + imageCardHeight + 24
+			drawSectionTitle('Selected textures', cursorY)
+			cursorY += 12
+
+			const columns = 2
+			const cardWidth =
+				(contentWidth - cardGap * (columns - 1)) / columns
+			let columnIndex = 0
+			let rowY = cursorY + 8
+
+			const entries = [...surfaceMap.entries()]
+			if (entries.length === 0) {
+				setTextColor(REPORT_MUTED)
+				doc.setFont('helvetica', 'normal')
+				doc.setFontSize(11)
+				doc.text(
+					'No textures selected for this scene.',
+					margin,
+					rowY + 12,
+				)
+				rowY += 28
+			}
+			for (
+				let entryIndex = 0;
+				entryIndex < entries.length;
+				entryIndex += 1
+			) {
+				const [base, material] = entries[entryIndex]
+				const nextY = rowY + cardHeight
+				const overflow = nextY > pageHeight - margin - 120
+
+				if (overflow) {
+					doc.addPage()
+					drawHeader(scene.name || `Scene ${i + 1}`)
+					rowY = headerHeight + 20
+					drawSectionTitle('Selected textures (cont.)', rowY)
+					rowY += 20
+					columnIndex = 0
+				}
+
+				const cardX = margin + columnIndex * (cardWidth + cardGap)
+
+				setDrawColor(REPORT_BORDER)
+				setFillColor([255, 255, 255])
+				doc.rect(cardX, rowY, cardWidth, cardHeight, 'FD')
+
+				const thumbX = cardX + 12
+				const thumbY = rowY + (cardHeight - thumbSize) / 2
+				if (material?.assetUrl && texturePreviewMap.has(material.assetUrl)) {
+					doc.addImage(
+						texturePreviewMap.get(material.assetUrl)!,
+						'PNG',
+						thumbX,
+						thumbY,
+						thumbSize,
+						thumbSize,
+					)
+				} else if (material?.color) {
+					const [r, g, b] = hexToRgb(material.color)
+					doc.setFillColor(r, g, b)
+					doc.rect(thumbX, thumbY, thumbSize, thumbSize, 'F')
+					setDrawColor(REPORT_BORDER)
+					doc.rect(thumbX, thumbY, thumbSize, thumbSize)
+				} else {
+					setFillColor(REPORT_HEADER_BG)
+					doc.rect(thumbX, thumbY, thumbSize, thumbSize, 'F')
+					setDrawColor(REPORT_BORDER)
+					doc.rect(thumbX, thumbY, thumbSize, thumbSize)
+				}
+
+				const textX = thumbX + thumbSize + 12
+				const textWidth = cardWidth - (textX - cardX) - 12
+				setTextColor(REPORT_TEXT)
+				doc.setFont('helvetica', 'bold')
+				doc.setFontSize(11)
+				doc.text(base, textX, rowY + 26)
+				doc.setFont('helvetica', 'normal')
+				doc.setFontSize(10)
+				setTextColor(REPORT_MUTED)
+				const details = doc.splitTextToSize(
+					getMaterialLabel(material),
+					textWidth,
+				)
+				doc.text(details, textX, rowY + 42)
+
+				columnIndex += 1
+				if (columnIndex >= columns) {
+					columnIndex = 0
+					rowY += cardHeight + 12
+				}
+			}
+
+			if (columnIndex !== 0) rowY += cardHeight + 12
+			cursorY = rowY + 10
+			if (cursorY + 80 > pageHeight - margin) {
+				doc.addPage()
+				drawHeader(scene.name || `Scene ${i + 1}`)
+				cursorY = headerHeight + 20
+			}
+			drawSectionTitle('Notes', cursorY)
 
 			const notes = scene.notes?.trim() || 'No notes'
-			doc.setFont('helvetica', 'bold')
-			doc.setFontSize(12)
-			cursorY += 10
-			doc.text('Notes', margin, cursorY)
 			doc.setFont('helvetica', 'normal')
 			doc.setFontSize(11)
-			const noteLines = doc.splitTextToSize(
-				notes,
-				pageWidth - margin * 2,
-			)
-			doc.text(noteLines, margin, cursorY + 14)
+			setTextColor(REPORT_TEXT)
+			const noteLines = doc.splitTextToSize(notes, contentWidth)
+			doc.text(noteLines, margin, cursorY + 16)
 		}
 
 		doc.save('materials-report.pdf')
