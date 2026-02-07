@@ -32,7 +32,7 @@ See [README.DOCKER.md](README.DOCKER.md) for details.
 1. **API** (port 3000). No API key required; object detection uses TensorFlow.js COCO-SSD.
 
    ```bash
-   cd api && npm install && npm run start:dev
+   cd api/segmentation-api && npm install && npm run start:dev
    ```
 
 2. **App** (port 5173):
@@ -56,7 +56,7 @@ See **[docs/ROOM_VISUALIZER_SPEC.md](docs/ROOM_VISUALIZER_SPEC.md)** for:
 ## Project layout
 
 - **app/** – Vite React app (pages: Home, Upload, Visualizer; components: layout, upload, materials, canvas, regions, controls, save)
-- **api/** – NestJS API (upload, segment, materials, projects)
+- **api/segmentation-api/** – NestJS API (upload, segment, materials, projects)
 - **docs/** – Specification and design
 
 **Object detection** uses [TensorFlow.js](https://www.tensorflow.org/js) and [COCO-SSD](https://github.com/tensorflow/tfjs-models/tree/master/coco-ssd) (free, no API key). See [docs/FREE_MODEL_CHOICE.md](docs/FREE_MODEL_CHOICE.md).

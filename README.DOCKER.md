@@ -31,7 +31,7 @@ docker compose build
 
 Both services watch for file changes:
 
-- **API**: Changes in `api/src/` trigger NestJS watch mode
+- **API**: Changes in `api/segmentation-api/src/` trigger NestJS watch mode
 - **App**: Changes in `app/src/` trigger Vite HMR
 
 ### How It Works
@@ -52,19 +52,19 @@ Both services watch for file changes:
 
 ### Named Volumes (persistent)
 - `postgres_data`: Database data
-- `api-uploads`: Uploaded images
-- `api-cache`: Segmentation cache
-- `api-node-modules`: API dependencies (cached)
+- `segmentation-api-uploads`: Uploaded images
+- `segmentation-api-cache`: Segmentation cache
+- `segmentation-api-node-modules`: API dependencies (cached)
 - `app-node-modules`: App dependencies (cached)
 
 ### Bind Mounts (hot reload)
-- `./api/src` → `/app/src`
+- `./api/segmentation-api/src` → `/app/src`
 - `./app/src` → `/app/src`
 - Config files mounted read-only
 
 ## Environment Variables
 
-Set in `api/.env`:
+Set in `api/segmentation-api/.env`:
 - `DATABASE_URL`: PostgreSQL connection string
 - `STORAGE_*`: Cloudflare R2 (optional)
 
@@ -98,14 +98,14 @@ docker compose down -v
 docker compose logs -f
 
 # Specific service
-docker compose logs -f api
+docker compose logs -f segmentation-api
 docker compose logs -f app
 ```
 
 ### Database migrations
 ```bash
 # Run migrations inside API container
-docker compose exec api npm run db:migrate
+docker compose exec segmentation-api npm run db:migrate
 
 # Or connect directly
 docker compose exec postgres psql -U anyohaus -d anyohaus

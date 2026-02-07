@@ -12,7 +12,7 @@ Surface detection uses **TensorFlow.js** with **DeepLab ADE20K** (pixel-level se
 
 ## Setup
 
-1. In `api`: `npm install` (adds `@tensorflow/tfjs`, `sharp`, `node-fetch`).
+1. In `api/segmentation-api`: `npm install` (adds `@tensorflow/tfjs`, `sharp`, `node-fetch`).
 2. Restart the API; `POST /segment` with `uploadId` or `imageUrl` runs DeepLab and returns detections with `maskUrl` per surface.
 
 No environment variables or API keys are required.

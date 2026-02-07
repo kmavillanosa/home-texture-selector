@@ -24,25 +24,25 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
+  segmentation-api:
     build:
-      context: ./api
+      context: ./api/segmentation-api
       dockerfile: Dockerfile.dev
     ports:
       - "3000:3000"
     volumes:
-      # Mount entire api directory (except node_modules via .dockerignore)
-      - ./api:/app:delegated
+      # Mount entire segmentation-api directory (except node_modules via .dockerignore)
+      - ./api/segmentation-api:/app:delegated
       # Override with named volumes for node_modules and generated files (faster, avoids conflicts)
-      - api-node-modules:/app/node_modules
-      - api-prisma-client:/app/node_modules/.prisma
+      - segmentation-api-node-modules:/app/node_modules
+      - segmentation-api-prisma-client:/app/node_modules/.prisma
       # Persist Hugging Face model cache across container rebuilds
-      - api-hf-cache:/app/.cache/huggingface
+      - segmentation-api-hf-cache:/app/.cache/huggingface
       # Persistent storage (preserved across restarts)
-      - api-uploads:/app/uploads
-      - api-cache:/app/cache
+      - segmentation-api-uploads:/app/uploads
+      - segmentation-api-cache:/app/cache
     env_file:
-      - ./api/.env  # Load environment variables from .env (optional, won't fail if missing)
+      - ./api/segmentation-api/.env  # Load environment variables from .env (optional, won't fail if missing)
     environment:
       - NODE_ENV=development
       - PORT=3000
@@ -74,10 +74,10 @@ services:
     environment:
       - NODE_ENV=development
       - API_PORT=3000
-      - API_HOST=api  # Docker service name
+      - API_HOST=segmentation-api  # Docker service name
       - BASE_URL=/
     depends_on:
-      - api
+      - segmentation-api
     # Restart on code changes
     restart: unless-stopped
     develop:
@@ -96,9 +96,9 @@ services:
 volumes:
   redis_data:
   postgres_data:
-  api-node-modules:
-  api-prisma-client:
-  api-hf-cache:
-  api-uploads:
-  api-cache:
+  segmentation-api-node-modules:
+  segmentation-api-prisma-client:
+  segmentation-api-hf-cache:
+  segmentation-api-uploads:
+  segmentation-api-cache:
   app-node-modules:

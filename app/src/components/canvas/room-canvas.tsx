@@ -1057,7 +1057,7 @@ export function RoomCanvas({
 					Surface detection unavailable
 				</p>
 				<p className="text-center text-sm text-slate-500">
-					Segmentation runs via a Python worker. Set <code className="rounded bg-slate-200 px-1">USE_PYTHON_SEGMENTATION=true</code> in <code className="rounded bg-slate-200 px-1">api/.env</code>, install <code className="rounded bg-slate-200 px-1">api/python/requirements.txt</code>, and check the API server logs.
+					Segmentation runs via a Python worker. Set <code className="rounded bg-slate-200 px-1">USE_PYTHON_SEGMENTATION=true</code> in <code className="rounded bg-slate-200 px-1">api/segmentation-api/.env</code>, install <code className="rounded bg-slate-200 px-1">api/segmentation-api/python/requirements.txt</code>, and check the API server logs.
 				</p>
 			</div>
 		)

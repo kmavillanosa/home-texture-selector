@@ -3,7 +3,7 @@ services:
     name: home-texture-api
     env: node
     plan: free
-    rootDir: api
+    rootDir: api/segmentation-api
     buildCommand: |
       npm install
       pip install -r python/requirements.txt

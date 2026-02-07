@@ -23,149 +23,127 @@ export function HomePage() {
 			<div className="relative mx-auto max-w-2xl text-center">
 				<span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 shadow-sm dark:border-emerald-900/60 dark:bg-slate-900/70 dark:text-emerald-200">
 					<span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
-					Instant room visualization
+					Know it before you paint it
 				</span>
 				<h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-5xl sm:leading-tight">
-					Design your room in real materials
+					Know it before you paint it
 				</h1>
 				<p className="mt-4 text-lg leading-relaxed text-slate-600 dark:text-slate-400">
-					Upload a photo, we detect your surfaces, then you can preview colors and
-					finishes and buy the materials you love.
+					Stop guessing. Upload a photo and preview paint colors and finishes on your
+					actual room before you commit.
 				</p>
 				<div className="mt-10 flex flex-wrap items-center justify-center gap-3">
 					<Link
 						to="/upload"
 						className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-6 py-3.5 text-base font-semibold text-white shadow-md transition-colors hover:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
 					>
-						Upload room photo
+						Upload your room
 					</Link>
 					<Link
 						to="/samples"
 						className="inline-flex items-center justify-center rounded-xl border border-emerald-200/70 bg-white px-6 py-3.5 text-base font-semibold text-emerald-700 shadow-sm transition-colors hover:border-emerald-300 hover:text-emerald-800 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-200 dark:hover:text-emerald-100"
 					>
-						Try sample rooms
+						Preview sample rooms
 					</Link>
 				</div>
 				<ul className="mt-14 grid max-w-xl gap-4 text-left text-slate-600 dark:text-slate-400 sm:mx-auto sm:max-w-2xl sm:grid-cols-2">
 					<li className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
 						<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400" aria-hidden>✓</span>
-						<span>Auto wall & floor detection</span>
+						<span>Auto-detect walls and paintable surfaces</span>
 					</li>
 					<li className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
 						<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400" aria-hidden>✓</span>
-						<span>Material library: flooring, paint, tiles, wallpapers</span>
+						<span>Paint palettes you can try instantly</span>
 					</li>
 					<li className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
 						<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400" aria-hidden>✓</span>
-						<span>Real-time preview with zoom & pan</span>
+						<span>Real-time before-and-after previews</span>
 					</li>
 					<li className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
 						<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400" aria-hidden>✓</span>
-						<span>Save, share & download</span>
+						<span>Save, compare, and share your top picks</span>
 					</li>
 				</ul>
 				<section className="mt-16 grid w-full gap-6 text-left sm:mt-20 sm:grid-cols-3">
 					<div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
 						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
-							Instant visualization
+							True-to-life preview
 						</p>
 						<h2 className="mt-3 text-lg font-semibold text-slate-900 dark:text-white">
-							See every finish before you buy
+							See your room before you paint
 						</h2>
 						<p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-							Swap paint, flooring, and tile options in seconds with
-							true-to-scale previews.
+							Swap paint colors in seconds and preview them on your
+							exact lighting and layout.
 						</p>
 					</div>
 					<div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
 						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
-							Curated materials
+							Color confidence
 						</p>
 						<h2 className="mt-3 text-lg font-semibold text-slate-900 dark:text-white">
-							Shop-ready finishes, organized
+							Make the right choice once
 						</h2>
 						<p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-							Explore a library of materials and match them to every
-							surface in your room.
+							Compare shades side by side, then lock in the one you
+							love without costly repainting.
 						</p>
 					</div>
 					<div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
 						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
-							Share faster
+							Aligned decisions
 						</p>
 						<h2 className="mt-3 text-lg font-semibold text-slate-900 dark:text-white">
-							Align decisions with your team
+							Get buy-in before you paint
 						</h2>
 						<p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-							Send a link or download a preview to keep everyone
-							synced on the final look.
+							Share a link or snapshot so everyone agrees on the
+							color before the first coat.
 						</p>
 					</div>
 				</section>
 				<section className="mt-16 grid w-full gap-6 text-left sm:mt-20 sm:grid-cols-2">
 					<div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
 						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
-							Good for
+							Perfect for
 						</p>
 						<h2 className="mt-3 text-lg font-semibold text-slate-900 dark:text-white">
-							Teams who need quick visuals
+							Anyone choosing a paint color
 						</h2>
 						<ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-400">
-							<li>Homeowners planning a refresh</li>
-							<li>Interior designers presenting options</li>
-							<li>Real estate teams staging listings</li>
-							<li>Property managers standardizing units</li>
+							<li>Homeowners testing weekend projects</li>
+							<li>Designers presenting color options</li>
+							<li>Landlords standardizing unit palettes</li>
+							<li>Realtors staging with confidence</li>
 						</ul>
 					</div>
 					<div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
 						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
-							Best for
+							Especially helpful for
 						</p>
 						<h2 className="mt-3 text-lg font-semibold text-slate-900 dark:text-white">
-							Finishes-first decision makers
+							Fast, confident paint decisions
 						</h2>
 						<ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-400">
-							<li>Design-build firms and contractors</li>
-							<li>Material vendors showcasing lines</li>
-							<li>Renovation planners comparing looks</li>
-							<li>Multifamily teams rolling out palettes</li>
+							<li>Contractors confirming client picks</li>
+							<li>Renovation planners comparing shades</li>
+							<li>Multifamily teams setting standards</li>
+							<li>DIYers who want zero repainting</li>
 						</ul>
-					</div>
-				</section>
-				<section className="mt-16 w-full rounded-3xl border border-slate-200/70 bg-white/80 px-6 py-10 text-left shadow-sm dark:border-slate-800 dark:bg-slate-900/60 sm:mt-20 sm:px-10">
-					<div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-						<div>
-							<p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
-								Vendor partners
-							</p>
-							<h2 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
-								We are open for vendors
-							</h2>
-							<p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-								Showcase your materials, reach new customers, and
-								get discovered inside every room visualization.
-							</p>
-						</div>
-						<Link
-							to="/register"
-							className="inline-flex items-center justify-center rounded-xl border border-emerald-200/80 bg-white px-5 py-3 text-sm font-semibold text-emerald-700 shadow-sm transition-colors hover:border-emerald-300 hover:text-emerald-800 dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-200 dark:hover:text-emerald-100"
-						>
-							Become a vendor
-						</Link>
 					</div>
 				</section>
 				<section className="mt-16 w-full rounded-3xl border border-emerald-100 bg-emerald-50/80 px-6 py-10 text-left dark:border-emerald-900/60 dark:bg-emerald-900/20 sm:mt-20 sm:px-10">
 					<div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
 						<div>
 							<p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
-								Build with confidence
+								Try it fast
 							</p>
 							<h2 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
-								Try a sample room in seconds
+								Preview paint in seconds
 							</h2>
 							<p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-								Start with a preloaded scene to explore the full
-								material experience.
+								Start with a sample room to see how colors feel
+								before you upload yours.
 							</p>
 						</div>
 						<Link

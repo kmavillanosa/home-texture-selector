@@ -16,8 +16,8 @@ yarn-error.log*
 pnpm-debug.log*
 .env
 .env.*
-api/cache/
-api/uploads/
-api/python/ckpts/
+api/segmentation-api/cache/
+api/segmentation-api/uploads/
+api/segmentation-api/python/ckpts/
 .DS_Store
 Thumbs.db

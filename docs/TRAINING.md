@@ -10,7 +10,7 @@ Segment edges can be aligned to the original image so boundaries are a **clear c
 
 ### Refine edges with image (GrabCut)
 
-Set in `api/.env`:
+Set in `api/segmentation-api/.env`:
 
 ```env
 REFINE_EDGES_WITH_IMAGE=true
